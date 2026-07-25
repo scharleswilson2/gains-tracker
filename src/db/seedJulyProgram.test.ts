@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { db } from './schema'
 import { getActiveProgramDay } from './programs'
 import { getDaySlots } from './programExercises'
@@ -111,5 +111,41 @@ describe('ensureJulyProgramSeeded', () => {
     await ensureJulyProgramSeeded()
     const day1 = (await getActiveProgramDay('2026-06-29'))!.day
     expect(day1.note).toBe('Recovery')
+  })
+
+  it('rolls back the entire seed if a failure occurs partway through, leaving no partial program', async () => {
+    const originalAdd = db.programPrescriptions.add.bind(db.programPrescriptions)
+    let callCount = 0
+    const addSpy = vi
+      .spyOn(db.programPrescriptions, 'add')
+      .mockImplementation((async (...args: Parameters<typeof originalAdd>) => {
+        callCount++
+        if (callCount === 5) {
+          throw new Error('Simulated failure mid-seed')
+        }
+        return originalAdd(...args)
+      }) as typeof db.programPrescriptions.add)
+
+    try {
+      await expect(ensureJulyProgramSeeded()).rejects.toThrow('Simulated failure mid-seed')
+
+      // The transaction must have rolled back entirely: no program, no
+      // weeks/days/exercises/prescriptions left behind despite several of
+      // them having been created before the simulated failure occurred.
+      expect(await db.programs.count()).toBe(0)
+      expect(await db.programWeeks.count()).toBe(0)
+      expect(await db.programDays.count()).toBe(0)
+      expect(await db.programExercises.count()).toBe(0)
+      expect(await db.programPrescriptions.count()).toBe(0)
+    } finally {
+      addSpy.mockRestore()
+    }
+
+    // A subsequent call, unimpeded, must fully re-seed rather than being
+    // permanently blocked by a half-created program row.
+    await ensureJulyProgramSeeded()
+    expect(await db.programs.count()).toBe(1)
+    expect(await db.programExercises.count()).toBe(32)
+    expect(await db.programPrescriptions.count()).toBe(128)
   })
 })

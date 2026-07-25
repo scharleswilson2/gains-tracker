@@ -405,52 +405,58 @@ export async function ensureJulyProgramSeeded(): Promise<void> {
   const existing = await db.programs.where('name').equals(PROGRAM_NAME).first()
   if (existing) return
 
-  await seedExerciseGlossary()
+  await db.transaction(
+    'rw',
+    [db.programs, db.programWeeks, db.programDays, db.programExercises, db.programPrescriptions, db.exercises],
+    async () => {
+      await seedExerciseGlossary()
 
-  const programId = await createProgram(PROGRAM_NAME, '2026-06-29', '2026-07-24')
-  for (const weekNumber of ALL_WEEKS) {
-    const range = WEEK_DATE_RANGES[weekNumber]
-    await addProgramWeek(programId, weekNumber, range.startDate, range.endDate)
-  }
-
-  for (const day of DAYS) {
-    const dayId = await addProgramDay(programId, day.dayNumber, day.note)
-    const blockCounters: Record<string, number> = {}
-
-    for (const slot of day.slots) {
-      const blockKey = slot.blockLabel ?? '__none__'
-      const currentIndex = blockCounters[blockKey] ?? 0
-      blockCounters[blockKey] = currentIndex + 1
-
-      const exercise = await findExerciseByName(slot.exerciseName)
-      if (!exercise) {
-        throw new Error(
-          `Exercise "${slot.exerciseName}" not found — seedExerciseGlossary must run first`
-        )
+      const programId = await createProgram(PROGRAM_NAME, '2026-06-29', '2026-07-24')
+      for (const weekNumber of ALL_WEEKS) {
+        const range = WEEK_DATE_RANGES[weekNumber]
+        await addProgramWeek(programId, weekNumber, range.startDate, range.endDate)
       }
 
-      const programExerciseId = await addProgramExercise({
-        dayId,
-        exerciseId: exercise.id!,
-        blockLabel: slot.blockLabel,
-        orderIndex: currentIndex,
-        measureType: slot.measureType,
-        eachSide: slot.eachSide,
-        tempo: slot.tempo,
-        categoryOptions: slot.categoryOptions,
-        categoriesToPick: slot.categoriesToPick,
-      })
+      for (const day of DAYS) {
+        const dayId = await addProgramDay(programId, day.dayNumber, day.note)
+        const blockCounters: Record<string, number> = {}
 
-      for (const weekTarget of slot.weeks) {
-        await addProgramPrescription({
-          programExerciseId,
-          weekNumber: weekTarget.week,
-          rir: weekTarget.rir,
-          warmupTargets: weekTarget.warmupTargets ?? [],
-          workingTargets: weekTarget.workingTargets,
-          isTest: weekTarget.isTest ?? false,
-        })
+        for (const slot of day.slots) {
+          const blockKey = slot.blockLabel ?? '__none__'
+          const currentIndex = blockCounters[blockKey] ?? 0
+          blockCounters[blockKey] = currentIndex + 1
+
+          const exercise = await findExerciseByName(slot.exerciseName)
+          if (!exercise) {
+            throw new Error(
+              `Exercise "${slot.exerciseName}" not found — seedExerciseGlossary must run first`
+            )
+          }
+
+          const programExerciseId = await addProgramExercise({
+            dayId,
+            exerciseId: exercise.id!,
+            blockLabel: slot.blockLabel,
+            orderIndex: currentIndex,
+            measureType: slot.measureType,
+            eachSide: slot.eachSide,
+            tempo: slot.tempo,
+            categoryOptions: slot.categoryOptions,
+            categoriesToPick: slot.categoriesToPick,
+          })
+
+          for (const weekTarget of slot.weeks) {
+            await addProgramPrescription({
+              programExerciseId,
+              weekNumber: weekTarget.week,
+              rir: weekTarget.rir,
+              warmupTargets: weekTarget.warmupTargets ?? [],
+              workingTargets: weekTarget.workingTargets,
+              isTest: weekTarget.isTest ?? false,
+            })
+          }
+        }
       }
     }
-  }
+  )
 }
