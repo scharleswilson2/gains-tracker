@@ -80,10 +80,13 @@ export function Progress() {
       const blockingSuccesses = blocking.reduce((s, d) => s + d.successCount, 0)
       const framingReps = framing.reduce((s, d) => s + d.repCount, 0)
       const framingSuccesses = framing.reduce((s, d) => s + d.successCount, 0)
+      if (blockingReps === 0 && framingReps === 0) {
+        continue
+      }
       rows.push({
         date: session.date,
-        blockingRate: successRate(blockingReps, blockingSuccesses) ?? 0,
-        framingRate: successRate(framingReps, framingSuccesses) ?? 0,
+        blockingRate: successRate(blockingReps, blockingSuccesses),
+        framingRate: successRate(framingReps, framingSuccesses),
       })
     }
     return rows
