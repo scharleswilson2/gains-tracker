@@ -27,4 +27,44 @@ describe('Settings', () => {
     // immediately to avoid a race under full-suite load.
     await waitFor(() => expect(createObjectURL).toHaveBeenCalled())
   })
+
+  it('does not import when the user cancels the replace-all-data confirmation', async () => {
+    const user = userEvent.setup()
+    await db.exercises.add({ name: 'Back Squat' })
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(<Settings />)
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File([JSON.stringify({ version: 1, exportedAt: 'x', tables: {} })], 'backup.json', {
+      type: 'application/json',
+    })
+    await user.upload(fileInput, file)
+
+    expect(confirmSpy).toHaveBeenCalled()
+    // Existing data must survive a cancelled import.
+    const exercises = await db.exercises.toArray()
+    expect(exercises.map((e) => e.name)).toEqual(['Back Squat'])
+
+    confirmSpy.mockRestore()
+  })
+
+  it('shows an inline error and preserves data when the imported file is invalid', async () => {
+    const user = userEvent.setup()
+    await db.exercises.add({ name: 'Deadlift' })
+
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<Settings />)
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['not valid json'], 'backup.json', { type: 'application/json' })
+    await user.upload(fileInput, file)
+
+    expect(await screen.findByText(/import failed/i)).toBeInTheDocument()
+
+    const exercises = await db.exercises.toArray()
+    expect(exercises.map((e) => e.name)).toEqual(['Deadlift'])
+
+    vi.restoreAllMocks()
+  })
 })
