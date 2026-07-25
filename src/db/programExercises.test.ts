@@ -79,6 +79,53 @@ describe('programExercises data layer', () => {
     expect(slots.map((s) => s.exerciseName)).toEqual(['Ex A1', 'Ex A2', 'Ex B1'])
   })
 
+  it('sorts a null blockLabel slot after real block labels, regardless of insertion order', async () => {
+    const exerciseIdNull = await db.exercises.add({ name: 'Ex Null' })
+    const exerciseIdB = await db.exercises.add({ name: 'Ex B' })
+    const exerciseIdA = await db.exercises.add({ name: 'Ex A' })
+    const programId = await db.programs.add({
+      name: 'Test',
+      startDate: '2026-06-29',
+      endDate: '2026-07-24',
+    })
+    const dayId = await db.programDays.add({ programId, dayNumber: 1 })
+
+    // Insert the null-blockLabel slot FIRST, with a low orderIndex, so a
+    // broken sort (e.g. `blockLabel ?? ''`) that sorts null before real
+    // labels, or one that relies on insertion/orderIndex order, would
+    // misplace it instead of pushing it to the end.
+    await addProgramExercise({
+      dayId,
+      exerciseId: exerciseIdNull,
+      blockLabel: null,
+      orderIndex: 0,
+      measureType: 'distance',
+      eachSide: false,
+      tempo: null,
+    })
+    await addProgramExercise({
+      dayId,
+      exerciseId: exerciseIdB,
+      blockLabel: 'B',
+      orderIndex: 0,
+      measureType: 'weight',
+      eachSide: false,
+      tempo: null,
+    })
+    await addProgramExercise({
+      dayId,
+      exerciseId: exerciseIdA,
+      blockLabel: 'A',
+      orderIndex: 0,
+      measureType: 'weight',
+      eachSide: false,
+      tempo: null,
+    })
+
+    const slots = await getDaySlots(dayId, 1)
+    expect(slots.map((s) => s.exerciseName)).toEqual(['Ex A', 'Ex B', 'Ex Null'])
+  })
+
   it('returns prescription: null when no prescription exists for the requested week', async () => {
     const exerciseId = await db.exercises.add({ name: 'Some Exercise' })
     const programId = await db.programs.add({
