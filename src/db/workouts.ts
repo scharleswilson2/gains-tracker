@@ -2,22 +2,26 @@ import { db } from './schema'
 import type { SetRecord } from './schema'
 
 export async function getOrCreateSessionForDate(date: string): Promise<number> {
-  const existing = await db.workoutSessions.where('date').equals(date).first()
-  if (existing) return existing.id!
-  return db.workoutSessions.add({ date })
+  return db.transaction('rw', db.workoutSessions, async () => {
+    const existing = await db.workoutSessions.where('date').equals(date).first()
+    if (existing) return existing.id!
+    return db.workoutSessions.add({ date })
+  })
 }
 
 export async function getOrCreateExerciseEntry(
   sessionId: number,
   exerciseId: number
 ): Promise<number> {
-  const existing = await db.exerciseEntries
-    .where('sessionId')
-    .equals(sessionId)
-    .and((e) => e.exerciseId === exerciseId)
-    .first()
-  if (existing) return existing.id!
-  return db.exerciseEntries.add({ sessionId, exerciseId })
+  return db.transaction('rw', db.exerciseEntries, async () => {
+    const existing = await db.exerciseEntries
+      .where('sessionId')
+      .equals(sessionId)
+      .and((e) => e.exerciseId === exerciseId)
+      .first()
+    if (existing) return existing.id!
+    return db.exerciseEntries.add({ sessionId, exerciseId })
+  })
 }
 
 export async function addSet(
@@ -57,4 +61,17 @@ export async function getLastSessionSets(
   const prior = history.filter((h) => h.date < beforeDate)
   if (prior.length === 0) return []
   return prior[prior.length - 1].sets
+}
+
+/**
+ * Flattens exercise history entries (assumed to already be in ascending date
+ * order, as returned by `getExerciseHistory`) into a single chronological
+ * list of sets. Shared by LogLift (to determine PR status for a new set not
+ * yet persisted — everything already in history logically happened
+ * "before" it, including earlier sets logged today) and Progress (to
+ * retroactively determine PR status for each historical set against
+ * everything logged earlier, one entry-slice at a time).
+ */
+export function flattenHistorySets(history: ExerciseHistoryEntry[]): SetRecord[] {
+  return history.flatMap((h) => h.sets)
 }

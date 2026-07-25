@@ -8,10 +8,7 @@ import {
   recordBlockingDrill,
   recordFramingDrill,
 } from '../db/catching'
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+import { todayIso } from '../lib/dates'
 
 export function LogCatching() {
   const today = todayIso()
@@ -67,6 +64,15 @@ export function LogCatching() {
     if (!sessionId) return
     const repCount = Number(blockingReps)
     const successCount = Number(blockingSuccesses)
+    if (
+      !Number.isInteger(repCount) ||
+      repCount <= 0 ||
+      !Number.isInteger(successCount) ||
+      successCount < 0 ||
+      successCount > repCount
+    ) {
+      return
+    }
     await recordBlockingDrill(sessionId, repCount, successCount)
     setSavedBlocking((prev) => [...prev, { reps: repCount, successes: successCount }])
     setBlockingReps('')
@@ -77,6 +83,15 @@ export function LogCatching() {
     if (!sessionId) return
     const repCount = Number(framingReps)
     const successCount = Number(framingSuccesses)
+    if (
+      !Number.isInteger(repCount) ||
+      repCount <= 0 ||
+      !Number.isInteger(successCount) ||
+      successCount < 0 ||
+      successCount > repCount
+    ) {
+      return
+    }
     await recordFramingDrill(sessionId, repCount, successCount)
     setSavedFraming((prev) => [...prev, { reps: repCount, successes: successCount }])
     setFramingReps('')

@@ -28,4 +28,70 @@ describe('LogLift', () => {
     expect(await screen.findByText(/pr!/i)).toBeInTheDocument()
     expect(await screen.findByText(/235.*5/)).toBeInTheDocument()
   })
+
+  it('does not flag a later same-day set as a PR when it does not beat an earlier same-day set', async () => {
+    const user = userEvent.setup()
+    await addExercise('Front Squat')
+
+    render(<LogLift />)
+
+    await user.type(await screen.findByLabelText(/exercise/i), 'Front Squat')
+    await user.click(await screen.findByText('Front Squat'))
+
+    await user.type(screen.getByLabelText(/weight/i), '225')
+    await user.type(screen.getByLabelText(/reps/i), '5')
+    await user.click(screen.getByRole('button', { name: /add set/i }))
+    expect(await screen.findByText(/pr!/i)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/weight/i), '200')
+    await user.type(screen.getByLabelText(/reps/i), '5')
+    await user.click(screen.getByRole('button', { name: /add set/i }))
+
+    // Regression test: the old logic excluded ALL of today's sets from the
+    // prior-sets comparison, so every same-day set after the first compared
+    // against an empty list and looked like a PR. The fixed logic includes
+    // already-logged same-day sets, so this lighter second set must NOT be
+    // flagged.
+    expect(await screen.findByText(/200.*5/)).toBeInTheDocument()
+    expect(screen.queryByText(/pr!/i)).not.toBeInTheDocument()
+  })
+
+  it('flags a later same-day set as a PR when it beats an earlier same-day set', async () => {
+    const user = userEvent.setup()
+    await addExercise('Incline Bench')
+
+    render(<LogLift />)
+
+    await user.type(await screen.findByLabelText(/exercise/i), 'Incline Bench')
+    await user.click(await screen.findByText('Incline Bench'))
+
+    await user.type(screen.getByLabelText(/weight/i), '135')
+    await user.type(screen.getByLabelText(/reps/i), '8')
+    await user.click(screen.getByRole('button', { name: /add set/i }))
+    expect(await screen.findByText(/pr!/i)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/weight/i), '145')
+    await user.type(screen.getByLabelText(/reps/i), '8')
+    await user.click(screen.getByRole('button', { name: /add set/i }))
+
+    expect(await screen.findByText(/145.*8/)).toBeInTheDocument()
+    expect(await screen.findByText(/pr!/i)).toBeInTheDocument()
+  })
+
+  it('does not log a set when weight or reps are missing/invalid', async () => {
+    const user = userEvent.setup()
+    await addExercise('Romanian Deadlift')
+
+    render(<LogLift />)
+
+    await user.type(await screen.findByLabelText(/exercise/i), 'Romanian Deadlift')
+    await user.click(await screen.findByText('Romanian Deadlift'))
+
+    // Reps left blank -> Number('') is 0, which must not be logged.
+    await user.type(screen.getByLabelText(/weight/i), '135')
+    await user.click(screen.getByRole('button', { name: /add set/i }))
+
+    expect(screen.queryByText(/pr!/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/135/)).not.toBeInTheDocument()
+  })
 })

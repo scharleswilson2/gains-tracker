@@ -28,4 +28,26 @@ describe('Progress', () => {
 
     expect(await screen.findByText(/190/)).toBeInTheDocument()
   })
+
+  it('flags a later same-day set as a PR against an earlier same-day set, but not the earlier one', async () => {
+    const user = userEvent.setup()
+
+    const exerciseId = await addExercise('Front Squat')
+    const priorSession = await getOrCreateSessionForDate('2026-07-10')
+    const priorEntry = await getOrCreateExerciseEntry(priorSession, exerciseId)
+    await addSet(priorEntry, 190, 5)
+
+    const todaySession = await getOrCreateSessionForDate('2026-07-24')
+    const todayEntry = await getOrCreateExerciseEntry(todaySession, exerciseId)
+    // Same-day: first set does not beat the prior-day record, second does.
+    await addSet(todayEntry, 185, 5)
+    await addSet(todayEntry, 205, 5)
+
+    render(<Progress />)
+
+    await user.selectOptions(await screen.findByLabelText(/select exercise/i), 'Front Squat')
+
+    expect(await screen.findByText(/2026-07-24: 205 x 5/)).toBeInTheDocument()
+    expect(screen.queryByText(/2026-07-24: 185 x 5/)).not.toBeInTheDocument()
+  })
 })

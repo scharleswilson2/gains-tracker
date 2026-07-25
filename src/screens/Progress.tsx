@@ -13,11 +13,12 @@ import {
 } from 'recharts'
 import { db } from '../db/schema'
 import { listExercises } from '../db/exercises'
-import { getExerciseHistory } from '../db/workouts'
+import { flattenHistorySets, getExerciseHistory } from '../db/workouts'
 import { estimateOneRepMax } from '../lib/oneRepMax'
 import { detectPr } from '../lib/prDetection'
 import { popTimeStats, successRate } from '../db/catching'
 import { addBodyweightEntry, listBodyweightEntries } from '../db/bodyweight'
+import { todayIso } from '../lib/dates'
 
 export function Progress() {
   const [selectedExerciseId, setSelectedExerciseId] = useState<number | null>(null)
@@ -48,7 +49,7 @@ export function Progress() {
 
   const prSets: { date: string; weightLbs: number; reps: number }[] = []
   history.forEach((h, i) => {
-    const priorSets = history.slice(0, i).flatMap((p) => p.sets)
+    const priorSets = flattenHistorySets(history.slice(0, i))
     h.sets.forEach((s) => {
       const pr = detectPr(s, priorSets)
       if (pr.isWeightPr || pr.isEstimated1RmPr) {
@@ -110,8 +111,7 @@ export function Progress() {
 
   async function logBodyweight() {
     if (!bodyweightInput) return
-    const today = new Date().toISOString().slice(0, 10)
-    await addBodyweightEntry(today, Number(bodyweightInput))
+    await addBodyweightEntry(todayIso(), Number(bodyweightInput))
     setBodyweightInput('')
   }
 

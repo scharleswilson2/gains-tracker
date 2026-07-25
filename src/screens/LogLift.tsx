@@ -3,16 +3,14 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { addExercise, listExercises } from '../db/exercises'
 import {
   addSet,
+  flattenHistorySets,
   getExerciseHistory,
   getLastSessionSets,
   getOrCreateExerciseEntry,
   getOrCreateSessionForDate,
 } from '../db/workouts'
 import { detectPr } from '../lib/prDetection'
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+import { todayIso } from '../lib/dates'
 
 export function LogLift() {
   const today = todayIso()
@@ -23,6 +21,7 @@ export function LogLift() {
   const [reps, setReps] = useState('')
   const [rpe, setRpe] = useState('')
   const [prMessage, setPrMessage] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const allExercises = useLiveQuery(() => listExercises(), []) ?? []
   const matches =
@@ -50,23 +49,36 @@ export function LogLift() {
   }
 
   async function handleAddSet() {
-    if (!selectedExerciseId) return
+    if (!selectedExerciseId || isSubmitting) return
     const weightLbs = Number(weight)
     const repsNum = Number(reps)
     const rpeNum = rpe ? Number(rpe) : undefined
 
-    const priorHistory = await getExerciseHistory(selectedExerciseId)
-    const priorSets = priorHistory.filter((h) => h.date < today).flatMap((h) => h.sets)
-    const pr = detectPr({ weightLbs, reps: repsNum }, priorSets)
+    if (!(weightLbs > 0) || !Number.isInteger(repsNum) || repsNum <= 0) {
+      return
+    }
 
-    const sessionId = await getOrCreateSessionForDate(today)
-    const entryId = await getOrCreateExerciseEntry(sessionId, selectedExerciseId)
-    await addSet(entryId, weightLbs, repsNum, rpeNum)
+    setIsSubmitting(true)
+    try {
+      // Everything already in history logically happened "before" this new
+      // set — including earlier sets logged today in this same session —
+      // since the new set has not been persisted yet. Same computation
+      // Progress.tsx uses for its retroactive PR list (via flattenHistorySets).
+      const priorHistory = await getExerciseHistory(selectedExerciseId)
+      const priorSets = flattenHistorySets(priorHistory)
+      const pr = detectPr({ weightLbs, reps: repsNum }, priorSets)
 
-    setWeight('')
-    setReps('')
-    setRpe('')
-    setPrMessage(pr.isWeightPr || pr.isEstimated1RmPr ? 'PR!' : null)
+      const sessionId = await getOrCreateSessionForDate(today)
+      const entryId = await getOrCreateExerciseEntry(sessionId, selectedExerciseId)
+      await addSet(entryId, weightLbs, repsNum, rpeNum)
+
+      setWeight('')
+      setReps('')
+      setRpe('')
+      setPrMessage(pr.isWeightPr || pr.isEstimated1RmPr ? 'PR!' : null)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -133,7 +145,7 @@ export function LogLift() {
             <label htmlFor="rpe-input">RPE (optional)</label>
             <input id="rpe-input" type="number" value={rpe} onChange={(e) => setRpe(e.target.value)} />
           </div>
-          <button type="button" onClick={handleAddSet}>
+          <button type="button" onClick={handleAddSet} disabled={isSubmitting}>
             Add Set
           </button>
 
