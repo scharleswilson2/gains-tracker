@@ -9,8 +9,12 @@ export async function findExerciseByName(name: string): Promise<Exercise | undef
   return db.exercises.where('name').equalsIgnoreCase(name).first()
 }
 
-export async function addExercise(name: string, category?: string): Promise<number> {
+export async function addExercise(
+  name: string,
+  category?: string,
+  description?: string
+): Promise<number> {
   const existing = await findExerciseByName(name)
   if (existing) return existing.id!
-  return db.exercises.add({ name, category })
+  return db.exercises.add({ name, category, description })
 }

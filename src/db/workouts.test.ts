@@ -8,6 +8,7 @@ import {
   getLastSessionSets,
   getOrCreateExerciseEntry,
   getOrCreateSessionForDate,
+  workingSetsOnly,
 } from './workouts'
 
 describe('workouts data layer', () => {
@@ -117,5 +118,54 @@ describe('workouts data layer', () => {
     const history = await getExerciseHistory(exerciseId)
     const priorSets = flattenHistorySets(history)
     expect(priorSets).toEqual([expect.objectContaining({ weightLbs: 185, reps: 5 })])
+  })
+
+  it('addSet defaults isWarmup to false when not provided', async () => {
+    const exerciseId = await addExercise('Test Isolation Exercise')
+    const sessionId = await getOrCreateSessionForDate('2026-07-01')
+    const entryId = await getOrCreateExerciseEntry(sessionId, exerciseId)
+    const setId = await addSet(entryId, 100, 5)
+    const set = await db.sets.get(setId)
+    expect(set?.isWarmup).toBe(false)
+  })
+
+  it('addSet stores isWarmup: true when passed', async () => {
+    const exerciseId = await addExercise('Test Isolation Exercise 2')
+    const sessionId = await getOrCreateSessionForDate('2026-07-01')
+    const entryId = await getOrCreateExerciseEntry(sessionId, exerciseId)
+    const setId = await addSet(entryId, 45, 5, undefined, true)
+    const set = await db.sets.get(setId)
+    expect(set?.isWarmup).toBe(true)
+  })
+
+  it('getOrCreateExerciseEntry stores programExerciseId/weekNumber on a new entry', async () => {
+    const exerciseId = await addExercise('Test Program Exercise')
+    const sessionId = await getOrCreateSessionForDate('2026-07-06')
+    const entryId = await getOrCreateExerciseEntry(sessionId, exerciseId, 42, 2)
+    const entry = await db.exerciseEntries.get(entryId)
+    expect(entry?.programExerciseId).toBe(42)
+    expect(entry?.weekNumber).toBe(2)
+  })
+
+  it('getOrCreateExerciseEntry does not overwrite an existing entry\'s program tag', async () => {
+    const exerciseId = await addExercise('Test Program Exercise 2')
+    const sessionId = await getOrCreateSessionForDate('2026-07-06')
+    const entryId1 = await getOrCreateExerciseEntry(sessionId, exerciseId, 42, 2)
+    const entryId2 = await getOrCreateExerciseEntry(sessionId, exerciseId, 99, 3)
+    expect(entryId1).toBe(entryId2)
+    const entry = await db.exerciseEntries.get(entryId1)
+    expect(entry?.programExerciseId).toBe(42) // unchanged from first call
+  })
+})
+
+describe('workingSetsOnly', () => {
+  it('filters out warmup sets', () => {
+    const sets = [
+      { id: 1, exerciseEntryId: 1, weightLbs: 45, reps: 5, isWarmup: true },
+      { id: 2, exerciseEntryId: 1, weightLbs: 135, reps: 5, isWarmup: false },
+      { id: 3, exerciseEntryId: 1, weightLbs: 145, reps: 3 }, // undefined isWarmup
+    ]
+    const result = workingSetsOnly(sets)
+    expect(result.map((s) => s.id)).toEqual([2, 3])
   })
 })

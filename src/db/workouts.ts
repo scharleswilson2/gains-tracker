@@ -11,7 +11,9 @@ export async function getOrCreateSessionForDate(date: string): Promise<number> {
 
 export async function getOrCreateExerciseEntry(
   sessionId: number,
-  exerciseId: number
+  exerciseId: number,
+  programExerciseId?: number,
+  weekNumber?: number
 ): Promise<number> {
   return db.transaction('rw', db.exerciseEntries, async () => {
     const existing = await db.exerciseEntries
@@ -20,7 +22,7 @@ export async function getOrCreateExerciseEntry(
       .and((e) => e.exerciseId === exerciseId)
       .first()
     if (existing) return existing.id!
-    return db.exerciseEntries.add({ sessionId, exerciseId })
+    return db.exerciseEntries.add({ sessionId, exerciseId, programExerciseId, weekNumber })
   })
 }
 
@@ -28,9 +30,14 @@ export async function addSet(
   exerciseEntryId: number,
   weightLbs: number,
   reps: number,
-  rpe?: number
+  rpe?: number,
+  isWarmup = false
 ): Promise<number> {
-  return db.sets.add({ exerciseEntryId, weightLbs, reps, rpe })
+  return db.sets.add({ exerciseEntryId, weightLbs, reps, rpe, isWarmup })
+}
+
+export function workingSetsOnly(sets: SetRecord[]): SetRecord[] {
+  return sets.filter((s) => !s.isWarmup)
 }
 
 export interface ExerciseHistoryEntry {

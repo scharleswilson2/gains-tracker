@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { db } from './schema'
 import { addExercise, findExerciseByName, listExercises } from './exercises'
 
 describe('exercises data layer', () => {
@@ -22,5 +23,11 @@ describe('exercises data layer', () => {
     const all = await listExercises()
     const names = all.map((e) => e.name)
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+  })
+
+  it('stores a description when provided on creation', async () => {
+    const id = await addExercise('Test Front Squat', undefined, 'A barbell squat held in the front rack.')
+    const found = await db.exercises.get(id)
+    expect(found?.description).toBe('A barbell squat held in the front rack.')
   })
 })
