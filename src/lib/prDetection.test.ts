@@ -19,14 +19,16 @@ describe('detectPr', () => {
   })
 
   it('flags an estimated 1RM PR based on the Epley formula across all prior sets', () => {
-    // new: 225 * (1 + 5/30) = 262.5 vs prior best 300*(1+1/30)=310 -> not a PR
+    // new: 225 * (1 + 5/30) = 262.5 vs prior best (reps=1 special-cases to
+    // the raw weight, not Epley'd) 300 -> not a PR
     const notPr = detectPr(
       { weightLbs: 225, reps: 5 },
       [{ weightLbs: 300, reps: 1 }]
     )
     expect(notPr.isEstimated1RmPr).toBe(false)
 
-    // new: 250 * (1 + 5/30) = 291.67 vs prior best 280*(1+1/30)=289.33 -> PR
+    // new: 250 * (1 + 5/30) = 291.67 vs prior best (reps=1 special-cases to
+    // the raw weight, not Epley'd) 280 -> PR
     const isPr = detectPr(
       { weightLbs: 250, reps: 5 },
       [{ weightLbs: 280, reps: 1 }]
