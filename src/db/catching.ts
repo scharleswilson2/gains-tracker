@@ -2,9 +2,11 @@ import { db } from './schema'
 import type { PopTimeRep } from './schema'
 
 export async function getOrCreateCatchingSessionForDate(date: string): Promise<number> {
-  const existing = await db.catchingSessions.where('date').equals(date).first()
-  if (existing) return existing.id!
-  return db.catchingSessions.add({ date })
+  return db.transaction('rw', db.catchingSessions, async () => {
+    const existing = await db.catchingSessions.where('date').equals(date).first()
+    if (existing) return existing.id!
+    return db.catchingSessions.add({ date })
+  })
 }
 
 export async function addPopTimeRep(

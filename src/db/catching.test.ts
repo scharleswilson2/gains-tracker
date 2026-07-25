@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { db } from './schema'
 import {
   addPopTimeRep,
   getOrCreateCatchingSessionForDate,
@@ -14,6 +15,16 @@ describe('catching data layer', () => {
     const id1 = await getOrCreateCatchingSessionForDate('2026-07-20')
     const id2 = await getOrCreateCatchingSessionForDate('2026-07-20')
     expect(id1).toBe(id2)
+  })
+
+  it('does not create duplicate sessions when called concurrently for the same date', async () => {
+    const [id1, id2] = await Promise.all([
+      getOrCreateCatchingSessionForDate('2026-07-23'),
+      getOrCreateCatchingSessionForDate('2026-07-23'),
+    ])
+    expect(id1).toBe(id2)
+    const all = await db.catchingSessions.where('date').equals('2026-07-23').toArray()
+    expect(all).toHaveLength(1)
   })
 
   it('records multiple pop time reps for a session and retrieves them', async () => {
