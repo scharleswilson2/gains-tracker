@@ -118,10 +118,9 @@ assumptions below for the handful of ambiguous notations.
   "5-10-5, 4x"; Day 4's "10yd build-up with 20yd sprints, 4x"): modeled as
   `bodyweight_reps` slots with a single working target of `[4]` (4
   reps/attempts), since no other unit is specified.
-- **DB Pull Throughs, "5ea, 5ea"**: interpreted as 2 working sets of 5 reps
-  each (not per-side) — the repeated "ea" here reads as shorthand for "each
-  set," matching the surrounding sets-notation, not a per-side instruction
-  like Reverse Lunge's `ea` uses elsewhere.
+- **DB Pull Throughs, "5ea, 5ea"**: per-side (`eachSide: true`), 2 working
+  sets of 5 reps each side — confirmed, matching Reverse Lunge's `ea` usage
+  elsewhere rather than "each set."
 - **"Recovery"** (listed at the end of every day) is a plain display note,
   not a loggable slot.
 - **Arm Farm / Arm Care** (Day 5): modeled with a simplified logging shape —
