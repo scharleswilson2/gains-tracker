@@ -159,17 +159,25 @@ export async function upsertProgramLogEntry(input: AddProgramLogEntryInput): Pro
   })
 }
 
-export async function getLastWeekSimpleValue(
+async function lastValueForMatchingEntry(
   programExerciseId: number,
-  weekNumber: number
+  weekNumber: number,
+  matchesCategory: (chosenCategory: string | undefined) => boolean
 ): Promise<number | undefined> {
   const entry = await db.programLogEntries
     .where('programExerciseId')
     .equals(programExerciseId)
-    .and((e) => e.weekNumber === weekNumber && e.chosenCategory === undefined)
+    .and((e) => e.weekNumber === weekNumber && matchesCategory(e.chosenCategory))
     .first()
   if (!entry || entry.values.length === 0) return undefined
   return entry.values[entry.values.length - 1]
+}
+
+export async function getLastWeekSimpleValue(
+  programExerciseId: number,
+  weekNumber: number
+): Promise<number | undefined> {
+  return lastValueForMatchingEntry(programExerciseId, weekNumber, (c) => c === undefined)
 }
 
 export async function getLastWeekCategoryValue(
@@ -177,11 +185,5 @@ export async function getLastWeekCategoryValue(
   weekNumber: number,
   category: string
 ): Promise<number | undefined> {
-  const entry = await db.programLogEntries
-    .where('programExerciseId')
-    .equals(programExerciseId)
-    .and((e) => e.weekNumber === weekNumber && e.chosenCategory === category)
-    .first()
-  if (!entry || entry.values.length === 0) return undefined
-  return entry.values[entry.values.length - 1]
+  return lastValueForMatchingEntry(programExerciseId, weekNumber, (c) => c === category)
 }
