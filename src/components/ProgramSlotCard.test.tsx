@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProgramSlotCard } from './ProgramSlotCard'
 import { addExercise } from '../db/exercises'
+import { upsertProgramLogEntry } from '../db/programLogEntries'
+import { db } from '../db/schema'
 import type { ResolvedSlot } from '../db/programExercises'
 
 function makeSlot(overrides: Partial<ResolvedSlot['programExercise']>, prescription: ResolvedSlot['prescription']): ResolvedSlot {
@@ -100,6 +102,62 @@ describe('ProgramSlotCard', () => {
     await user.click(screen.getByRole('button', { name: /save/i }))
 
     expect(await screen.findByText(/Triceps.*logged/i)).toBeInTheDocument()
+  })
+
+  it('logs a weight set with an RPE value and persists it on the underlying set', async () => {
+    const user = userEvent.setup()
+    const exerciseId = await addExercise('Test Overhead Press')
+    const slot = makeSlot(
+      { exerciseId, measureType: 'weight' },
+      { id: 6, programExerciseId: 6, weekNumber: 1, rir: 'M', warmupTargets: [], workingTargets: [3, 3, 3, 5], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
+
+    await user.type(screen.getByLabelText(/weight/i), '135')
+    await user.type(screen.getByLabelText(/reps/i), '5')
+    await user.type(screen.getByLabelText(/rpe/i), '8')
+    await user.click(screen.getByRole('button', { name: /add set/i }))
+
+    await screen.findByText(/pr!/i)
+    const sets = await db.sets.toArray()
+    expect(sets.some((s) => s.weightLbs === 135 && s.reps === 5 && s.rpe === 8)).toBe(true)
+  })
+
+  it('disables not-yet-logged category buttons once categoriesToPick is reached, but keeps already-logged ones enabled', async () => {
+    const exerciseId = await addExercise('Test Arm Farm Capped')
+    const slot = makeSlot(
+      {
+        id: 7,
+        exerciseId,
+        measureType: 'category_choice',
+        categoryOptions: [
+          { categoryLabel: 'Triceps', exercises: ['Cable Push Downs'] },
+          { categoryLabel: 'Biceps', exercises: ['Hammer Curl'] },
+          { categoryLabel: 'Forearms', exercises: ['Wrist Curl'] },
+          { categoryLabel: 'Shoulders', exercises: ['Lateral Raise'] },
+        ],
+        categoriesToPick: 3,
+      },
+      { id: 7, programExerciseId: 7, weekNumber: 1, rir: null, warmupTargets: [], workingTargets: [], isTest: false }
+    )
+
+    for (const category of ['Triceps', 'Biceps', 'Forearms']) {
+      await upsertProgramLogEntry({
+        programExerciseId: 7,
+        date: '2026-07-06',
+        weekNumber: 1,
+        values: [10],
+        isWarmup: [false],
+        chosenCategory: category,
+        chosenExercise: 'placeholder',
+      })
+    }
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Shoulders' })).toBeDisabled())
+    expect(screen.getByRole('button', { name: 'Triceps' })).toBeEnabled()
   })
 
   it('shows TEST instead of numeric targets when the prescription is a test week', async () => {

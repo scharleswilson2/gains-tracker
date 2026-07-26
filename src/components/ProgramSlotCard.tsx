@@ -49,6 +49,7 @@ export function ProgramSlotCard({ slot, date, weekNumber }: ProgramSlotCardProps
 function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
+  const [rpe, setRpe] = useState('')
   const [isWarmup, setIsWarmup] = useState(false)
   const [prMessage, setPrMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -58,6 +59,7 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
     if (isSubmitting) return
     const weightLbs = Number(weight)
     const repsNum = Number(reps)
+    const rpeNum = rpe ? Number(rpe) : undefined
     if (!(weightLbs > 0) || !Number.isInteger(repsNum) || repsNum <= 0) return
 
     setIsSubmitting(true)
@@ -67,12 +69,14 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
         date,
         weightLbs,
         reps: repsNum,
+        rpe: rpeNum,
         isWarmup,
         programExerciseId: slot.programExercise.id,
         weekNumber,
       })
       setWeight('')
       setReps('')
+      setRpe('')
       setIsWarmup(false)
       setPrMessage(!isWarmup && (pr.isWeightPr || pr.isEstimated1RmPr) ? 'PR!' : null)
     } finally {
@@ -82,6 +86,7 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
 
   const weightId = `weight-${slot.programExercise.id}`
   const repsId = `reps-${slot.programExercise.id}`
+  const rpeId = `rpe-${slot.programExercise.id}`
   const warmupId = `warmup-${slot.programExercise.id}`
 
   return (
@@ -90,6 +95,8 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
       <input id={weightId} type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
       <label htmlFor={repsId}>Reps</label>
       <input id={repsId} type="number" value={reps} onChange={(e) => setReps(e.target.value)} />
+      <label htmlFor={rpeId}>RPE (optional)</label>
+      <input id={rpeId} type="number" value={rpe} onChange={(e) => setRpe(e.target.value)} />
       {hasWarmupTargets && (
         <>
           <label htmlFor={warmupId}>Warmup set</label>
@@ -111,6 +118,7 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
 
 function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const [value, setValue] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const programExerciseId = slot.programExercise.id!
 
   const entries = useLiveQuery(
@@ -120,18 +128,24 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const loggedValues = entries[0]?.values ?? []
 
   async function handleAdd() {
+    if (isSubmitting) return
     const numValue = Number(value)
     if (!Number.isFinite(numValue) || numValue <= 0) return
-    const nextValues = [...loggedValues, numValue]
-    const nextIsWarmup = [...(entries[0]?.isWarmup ?? []), false]
-    await upsertProgramLogEntry({
-      programExerciseId,
-      date,
-      weekNumber,
-      values: nextValues,
-      isWarmup: nextIsWarmup,
-    })
-    setValue('')
+    setIsSubmitting(true)
+    try {
+      const nextValues = [...loggedValues, numValue]
+      const nextIsWarmup = [...(entries[0]?.isWarmup ?? []), false]
+      await upsertProgramLogEntry({
+        programExerciseId,
+        date,
+        weekNumber,
+        values: nextValues,
+        isWarmup: nextIsWarmup,
+      })
+      setValue('')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const valueId = `value-${programExerciseId}`
@@ -140,7 +154,7 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
     <div>
       <label htmlFor={valueId}>Value</label>
       <input id={valueId} type="number" value={value} onChange={(e) => setValue(e.target.value)} />
-      <button type="button" onClick={handleAdd}>
+      <button type="button" onClick={handleAdd} disabled={isSubmitting}>
         Add Set
       </button>
       <ul>
@@ -156,6 +170,7 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedExercise, setSelectedExercise] = useState('')
   const [value, setValue] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const programExerciseId = slot.programExercise.id!
   const categoryOptions = slot.programExercise.categoryOptions ?? []
 
@@ -164,38 +179,56 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
     [programExerciseId, date]
   ) ?? []
   const loggedCategories = entries.map((e) => e.chosenCategory).filter(Boolean)
+  const categoriesToPick = slot.programExercise.categoriesToPick ?? categoryOptions.length
+  const capReached = loggedCategories.length >= categoriesToPick
 
   async function handleSave() {
+    if (isSubmitting) return
     const numValue = Number(value)
     if (!selectedCategory || !selectedExercise || !Number.isFinite(numValue) || numValue <= 0) return
-    await upsertProgramLogEntry({
-      programExerciseId,
-      date,
-      weekNumber,
-      values: [numValue],
-      isWarmup: [false],
-      chosenCategory: selectedCategory,
-      chosenExercise: selectedExercise,
-    })
-    setValue('')
+    setIsSubmitting(true)
+    try {
+      await upsertProgramLogEntry({
+        programExerciseId,
+        date,
+        weekNumber,
+        values: [numValue],
+        isWarmup: [false],
+        chosenCategory: selectedCategory,
+        chosenExercise: selectedExercise,
+      })
+      setValue('')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <div>
       <p>Logged today: {loggedCategories.length > 0 ? loggedCategories.join(', ') : 'none'}</p>
+      {capReached && (
+        <p>
+          You've logged {categoriesToPick} categories today — the max for this exercise
+        </p>
+      )}
       <div>
-        {categoryOptions.map((category) => (
-          <button
-            key={category.categoryLabel}
-            type="button"
-            onClick={() => {
-              setSelectedCategory(category.categoryLabel)
-              setSelectedExercise('')
-            }}
-          >
-            {category.categoryLabel}
-          </button>
-        ))}
+        {categoryOptions.map((category) => {
+          const alreadyLogged = loggedCategories.includes(category.categoryLabel)
+          const disabled = capReached && !alreadyLogged
+          return (
+            <button
+              key={category.categoryLabel}
+              type="button"
+              disabled={disabled}
+              onClick={() => {
+                setSelectedCategory(category.categoryLabel)
+                setSelectedExercise('')
+              }}
+            >
+              {category.categoryLabel}
+            </button>
+          )
+        })}
       </div>
       {selectedCategory && (
         <div>
@@ -223,7 +256,7 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
-          <button type="button" onClick={handleSave}>
+          <button type="button" onClick={handleSave} disabled={isSubmitting}>
             Save
           </button>
           {loggedCategories.includes(selectedCategory) && <p>{selectedCategory} logged</p>}
