@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   addProgramLogEntry,
+  appendProgramLogValue,
   getProgramLogEntries,
   getProgramLogEntriesForDate,
+  logCategoryChoice,
   upsertProgramLogEntry,
 } from './programLogEntries'
 
@@ -125,5 +127,126 @@ describe('upsertProgramLogEntry / getProgramLogEntriesForDate', () => {
     const entries = await getProgramLogEntriesForDate(12, '2026-07-03')
     expect(entries).toHaveLength(2)
     expect(entries.map((e) => e.chosenCategory).sort()).toEqual(['Biceps', 'Triceps'])
+  })
+})
+
+describe('appendProgramLogValue', () => {
+  it('creates a one-value entry when the slot+date has nothing logged yet', async () => {
+    const id = await appendProgramLogValue(20, '2026-07-06', 2, 3)
+
+    const entries = await getProgramLogEntriesForDate(20, '2026-07-06')
+    expect(entries).toHaveLength(1)
+    expect(entries[0].id).toBe(id)
+    expect(entries[0].values).toEqual([3])
+    expect(entries[0].isWarmup).toEqual([false])
+    expect(entries[0].weekNumber).toBe(2)
+  })
+
+  it('appends to the existing entry rather than creating a duplicate row', async () => {
+    const id1 = await appendProgramLogValue(21, '2026-07-06', 2, 3)
+    const id2 = await appendProgramLogValue(21, '2026-07-06', 2, 5)
+
+    expect(id2).toBe(id1)
+    const entries = await getProgramLogEntriesForDate(21, '2026-07-06')
+    expect(entries).toHaveLength(1)
+    expect(entries[0].values).toEqual([3, 5])
+    expect(entries[0].isWarmup).toEqual([false, false])
+  })
+
+  it('does not lose a value when two appends are fired back-to-back', async () => {
+    await Promise.all([
+      appendProgramLogValue(22, '2026-07-06', 2, 3),
+      appendProgramLogValue(22, '2026-07-06', 2, 5),
+    ])
+
+    const entries = await getProgramLogEntriesForDate(22, '2026-07-06')
+    expect(entries).toHaveLength(1)
+    expect([...entries[0].values].sort()).toEqual([3, 5])
+  })
+
+  it('keeps category entries for the same slot+date separate from the plain entry', async () => {
+    await upsertProgramLogEntry({
+      programExerciseId: 23,
+      date: '2026-07-06',
+      weekNumber: 2,
+      values: [12],
+      isWarmup: [false],
+      chosenCategory: 'Triceps',
+      chosenExercise: 'Cable Push Downs',
+    })
+    await appendProgramLogValue(23, '2026-07-06', 2, 3)
+
+    const entries = await getProgramLogEntriesForDate(23, '2026-07-06')
+    expect(entries).toHaveLength(2)
+    const plain = entries.find((e) => e.chosenCategory === undefined)
+    expect(plain?.values).toEqual([3])
+  })
+})
+
+describe('logCategoryChoice', () => {
+  const base = {
+    programExerciseId: 30,
+    date: '2026-07-06',
+    weekNumber: 2,
+    value: 10,
+    categoriesToPick: 3,
+  }
+
+  it('rejects a 4th distinct category while still allowing an existing one to be re-logged', async () => {
+    for (const category of ['Triceps', 'Biceps', 'Forearms']) {
+      const result = await logCategoryChoice({
+        ...base,
+        chosenCategory: category,
+        chosenExercise: `${category} Move`,
+      })
+      expect(result.ok).toBe(true)
+    }
+
+    const rejected = await logCategoryChoice({
+      ...base,
+      chosenCategory: 'Shoulders',
+      chosenExercise: 'Lateral Raise',
+    })
+    expect(rejected).toEqual({ ok: false, capReached: true })
+
+    const afterReject = await getProgramLogEntriesForDate(30, '2026-07-06')
+    expect(afterReject).toHaveLength(3)
+    expect(afterReject.map((e) => e.chosenCategory).sort()).toEqual([
+      'Biceps',
+      'Forearms',
+      'Triceps',
+    ])
+
+    const relogged = await logCategoryChoice({
+      ...base,
+      value: 99,
+      chosenCategory: 'Triceps',
+      chosenExercise: 'OH Tricep Ext',
+    })
+    expect(relogged.ok).toBe(true)
+
+    const entries = await getProgramLogEntriesForDate(30, '2026-07-06')
+    expect(entries).toHaveLength(3)
+    const triceps = entries.find((e) => e.chosenCategory === 'Triceps')
+    expect(triceps?.values).toEqual([99])
+    expect(triceps?.chosenExercise).toBe('OH Tricep Ext')
+  })
+
+  it('enforces the cap even when picks are fired concurrently', async () => {
+    const results = await Promise.all(
+      ['Triceps', 'Biceps', 'Forearms', 'Shoulders'].map((category) =>
+        logCategoryChoice({
+          ...base,
+          programExerciseId: 31,
+          chosenCategory: category,
+          chosenExercise: `${category} Move`,
+        })
+      )
+    )
+
+    expect(results.filter((r) => r.ok)).toHaveLength(3)
+    expect(results.filter((r) => !r.ok)).toHaveLength(1)
+    const entries = await getProgramLogEntriesForDate(31, '2026-07-06')
+    expect(entries).toHaveLength(3)
   })
 })
