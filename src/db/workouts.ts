@@ -21,7 +21,12 @@ export async function getOrCreateExerciseEntry(
       .equals(sessionId)
       .and((e) => e.exerciseId === exerciseId)
       .first()
-    if (existing) return existing.id!
+    if (existing) {
+      if (existing.programExerciseId === undefined && programExerciseId !== undefined) {
+        await db.exerciseEntries.update(existing.id!, { programExerciseId, weekNumber })
+      }
+      return existing.id!
+    }
     return db.exerciseEntries.add({ sessionId, exerciseId, programExerciseId, weekNumber })
   })
 }
@@ -43,6 +48,7 @@ export function workingSetsOnly(sets: SetRecord[]): SetRecord[] {
 export interface ExerciseHistoryEntry {
   date: string
   sets: SetRecord[]
+  weekNumber?: number
 }
 
 export async function getExerciseHistory(
@@ -54,7 +60,7 @@ export async function getExerciseHistory(
     const session = await db.workoutSessions.get(entry.sessionId)
     if (!session) continue
     const sets = await db.sets.where('exerciseEntryId').equals(entry.id!).toArray()
-    results.push({ date: session.date, sets })
+    results.push({ date: session.date, sets, weekNumber: entry.weekNumber })
   }
   results.sort((a, b) => a.date.localeCompare(b.date))
   return results
@@ -68,6 +74,13 @@ export async function getLastSessionSets(
   const prior = history.filter((h) => h.date < beforeDate)
   if (prior.length === 0) return []
   return prior[prior.length - 1].sets
+}
+
+export async function getWorkingSetHistory(exerciseId: number): Promise<ExerciseHistoryEntry[]> {
+  const history = await getExerciseHistory(exerciseId)
+  return history
+    .map((h) => ({ ...h, sets: workingSetsOnly(h.sets) }))
+    .filter((h) => h.sets.length > 0)
 }
 
 /**

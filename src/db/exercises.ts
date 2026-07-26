@@ -18,3 +18,10 @@ export async function addExercise(
   if (existing) return existing.id!
   return db.exercises.add({ name, category, description })
 }
+
+export async function listExercisesWithHistory(): Promise<Exercise[]> {
+  const entries = await db.exerciseEntries.toArray()
+  const exerciseIds = new Set(entries.map((e) => e.exerciseId))
+  const all = await listExercises()
+  return all.filter((ex) => exerciseIds.has(ex.id!))
+}

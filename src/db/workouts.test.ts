@@ -8,6 +8,7 @@ import {
   getLastSessionSets,
   getOrCreateExerciseEntry,
   getOrCreateSessionForDate,
+  getWorkingSetHistory,
   workingSetsOnly,
 } from './workouts'
 
@@ -168,4 +169,44 @@ describe('workingSetsOnly', () => {
     const result = workingSetsOnly(sets)
     expect(result.map((s) => s.id)).toEqual([2, 3])
   })
+})
+
+describe('getWorkingSetHistory', () => {
+  it('excludes warmup sets and drops entries left with zero sets', async () => {
+    const exerciseId = await addExercise('Test Warmup Exercise')
+    const session1 = await getOrCreateSessionForDate('2026-07-01')
+    const entry1 = await getOrCreateExerciseEntry(session1, exerciseId)
+    await addSet(entry1, 45, 5, undefined, true) // warmup only this session
+
+    const session2 = await getOrCreateSessionForDate('2026-07-08')
+    const entry2 = await getOrCreateExerciseEntry(session2, exerciseId)
+    await addSet(entry2, 45, 5, undefined, true) // warmup
+    await addSet(entry2, 225, 5, undefined, false) // working set
+
+    const history = await getWorkingSetHistory(exerciseId)
+    expect(history).toHaveLength(1) // 2026-07-01 dropped entirely (all warmup)
+    expect(history[0].date).toBe('2026-07-08')
+    expect(history[0].sets).toHaveLength(1)
+    expect(history[0].sets[0].weightLbs).toBe(225)
+  })
+})
+
+it('getExerciseHistory includes weekNumber from the entry when present', async () => {
+  const exerciseId = await addExercise('Test Week Tag Exercise')
+  const sessionId = await getOrCreateSessionForDate('2026-07-06')
+  const entryId = await getOrCreateExerciseEntry(sessionId, exerciseId, 42, 2)
+  await addSet(entryId, 135, 5)
+  const history = await getExerciseHistory(exerciseId)
+  expect(history[0].weekNumber).toBe(2)
+})
+
+it('getOrCreateExerciseEntry backfills a program tag onto an existing untagged entry', async () => {
+  const exerciseId = await addExercise('Test Backfill Exercise')
+  const sessionId = await getOrCreateSessionForDate('2026-07-06')
+  const entryId1 = await getOrCreateExerciseEntry(sessionId, exerciseId) // untagged, e.g. free-form
+  const entryId2 = await getOrCreateExerciseEntry(sessionId, exerciseId, 42, 2) // same slot, now tagged
+  expect(entryId1).toBe(entryId2)
+  const entry = await db.exerciseEntries.get(entryId1)
+  expect(entry?.programExerciseId).toBe(42)
+  expect(entry?.weekNumber).toBe(2)
 })

@@ -23,3 +23,33 @@ export async function getProgramLogEntries(programExerciseId: number): Promise<P
   entries.sort((a, b) => a.date.localeCompare(b.date))
   return entries
 }
+
+export async function getProgramLogEntriesForDate(
+  programExerciseId: number,
+  date: string
+): Promise<ProgramLogEntry[]> {
+  return db.programLogEntries
+    .where('programExerciseId')
+    .equals(programExerciseId)
+    .and((e) => e.date === date)
+    .toArray()
+}
+
+export async function upsertProgramLogEntry(input: AddProgramLogEntryInput): Promise<number> {
+  return db.transaction('rw', db.programLogEntries, async () => {
+    const existing = await db.programLogEntries
+      .where('programExerciseId')
+      .equals(input.programExerciseId)
+      .and(
+        (e) =>
+          e.date === input.date &&
+          (e.chosenCategory ?? null) === (input.chosenCategory ?? null)
+      )
+      .first()
+    if (existing) {
+      await db.programLogEntries.update(existing.id!, input)
+      return existing.id!
+    }
+    return db.programLogEntries.add(input)
+  })
+}

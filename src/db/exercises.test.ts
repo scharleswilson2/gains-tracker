@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { db } from './schema'
-import { addExercise, findExerciseByName, listExercises } from './exercises'
+import { addExercise, findExerciseByName, listExercises, listExercisesWithHistory } from './exercises'
 
 describe('exercises data layer', () => {
   it('adds a new exercise and finds it by name case-insensitively', async () => {
@@ -30,4 +30,14 @@ describe('exercises data layer', () => {
     const found = await db.exercises.get(id)
     expect(found?.description).toBe('A barbell squat held in the front rack.')
   })
+})
+
+it('listExercisesWithHistory only returns exercises with at least one logged entry', async () => {
+  const loggedId = await addExercise('Logged Exercise')
+  await addExercise('Never Logged Exercise')
+  const sessionId = await db.workoutSessions.add({ date: '2026-07-01' })
+  await db.exerciseEntries.add({ sessionId, exerciseId: loggedId })
+
+  const withHistory = await listExercisesWithHistory()
+  expect(withHistory.map((e) => e.name)).toEqual(['Logged Exercise'])
 })

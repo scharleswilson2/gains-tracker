@@ -59,3 +59,41 @@ export async function getActiveProgramDay(date: string): Promise<ActiveProgramDa
 
   return { program, week, day }
 }
+
+export async function listPrograms(): Promise<Program[]> {
+  const all = await db.programs.toArray()
+  return all.sort((a, b) => b.startDate.localeCompare(a.startDate))
+}
+
+export async function listProgramWeeks(programId: number): Promise<ProgramWeek[]> {
+  const weeks = await db.programWeeks.where('programId').equals(programId).toArray()
+  return weeks.sort((a, b) => a.weekNumber - b.weekNumber)
+}
+
+export async function listProgramDays(programId: number): Promise<ProgramDay[]> {
+  const days = await db.programDays.where('programId').equals(programId).toArray()
+  return days.sort((a, b) => a.dayNumber - b.dayNumber)
+}
+
+export interface CurrentProgramWeek {
+  program: Program
+  week: ProgramWeek
+}
+
+export async function getCurrentProgramWeek(date: string): Promise<CurrentProgramWeek | null> {
+  const weeks = await db.programWeeks
+    .filter((w) => w.startDate <= date && date <= w.endDate)
+    .toArray()
+  if (weeks.length > 0) {
+    const week = weeks[0]
+    const program = await db.programs.get(week.programId)
+    if (program) return { program, week }
+  }
+
+  const programs = await listPrograms()
+  if (programs.length === 0) return null
+  const latestProgram = programs[0]
+  const weeksForLatest = await listProgramWeeks(latestProgram.id!)
+  if (weeksForLatest.length === 0) return null
+  return { program: latestProgram, week: weeksForLatest[weeksForLatest.length - 1] }
+}

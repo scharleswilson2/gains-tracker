@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { db } from './schema'
-import { addProgramExercise, addProgramPrescription, getDaySlots } from './programExercises'
+import {
+  addProgramExercise,
+  addProgramPrescription,
+  getDaySlots,
+  groupSlotsByBlock,
+  type ResolvedSlot,
+} from './programExercises'
 
 describe('programExercises data layer', () => {
   it('adds a slot and its prescription, then resolves via getDaySlots', async () => {
@@ -175,5 +181,36 @@ describe('programExercises data layer', () => {
     const slots = await getDaySlots(dayId, 1)
     expect(slots[0].programExercise.categoriesToPick).toBe(3)
     expect(slots[0].programExercise.categoryOptions).toHaveLength(2)
+  })
+})
+
+describe('groupSlotsByBlock', () => {
+  it('groups consecutive same-blockLabel slots, using "Other" for null', () => {
+    const makeSlot = (blockLabel: string | null, exerciseName: string): ResolvedSlot => ({
+      programExercise: {
+        id: 1,
+        dayId: 1,
+        exerciseId: 1,
+        blockLabel,
+        orderIndex: 0,
+        measureType: 'bodyweight_reps',
+        eachSide: false,
+        tempo: null,
+      },
+      exerciseName,
+      prescription: null,
+    })
+    const slots = [
+      makeSlot('A', 'Ex A1'),
+      makeSlot('A', 'Ex A2'),
+      makeSlot('B', 'Ex B1'),
+      makeSlot(null, 'Ex None'),
+    ]
+    const grouped = groupSlotsByBlock(slots)
+    expect(grouped.map(([label, group]) => [label, group.map((s) => s.exerciseName)])).toEqual([
+      ['A', ['Ex A1', 'Ex A2']],
+      ['B', ['Ex B1']],
+      ['Other', ['Ex None']],
+    ])
   })
 })

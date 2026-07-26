@@ -72,3 +72,17 @@ export async function getDaySlots(dayId: number, weekNumber: number): Promise<Re
 
   return resolved
 }
+
+export function groupSlotsByBlock(slots: ResolvedSlot[]): [string, ResolvedSlot[]][] {
+  const groups: [string, ResolvedSlot[]][] = []
+  for (const slot of slots) {
+    const label = slot.programExercise.blockLabel ?? 'Other'
+    const lastGroup = groups[groups.length - 1]
+    if (lastGroup && lastGroup[0] === label) {
+      lastGroup[1].push(slot)
+    } else {
+      groups.push([label, [slot]])
+    }
+  }
+  return groups
+}
