@@ -16,10 +16,23 @@ export function History() {
       db.programLogEntries.toArray(),
     ])
 
+    // Two bulk lookups instead of two sequential gets per row: program-log
+    // history grows without bound, so a per-row round trip would keep getting
+    // slower on every re-run of this live query.
+    const slotIds = [...new Set(programLogEntries.map((e) => e.programExerciseId))]
+    const slots = await db.programExercises.bulkGet(slotIds)
+    const slotsById = new Map(slotIds.map((id, i) => [id, slots[i]]))
+
+    const exerciseIds = [
+      ...new Set(slots.filter((s) => s !== undefined).map((s) => s.exerciseId)),
+    ]
+    const exercises = await db.exercises.bulkGet(exerciseIds)
+    const exercisesById = new Map(exerciseIds.map((id, i) => [id, exercises[i]]))
+
     const programLogRows: HistoryRow[] = []
     for (const entry of programLogEntries) {
-      const slot = await db.programExercises.get(entry.programExerciseId)
-      const exercise = slot ? await db.exercises.get(slot.exerciseId) : undefined
+      const slot = slotsById.get(entry.programExerciseId)
+      const exercise = slot ? exercisesById.get(slot.exerciseId) : undefined
       const name = exercise?.name ?? 'Unknown Exercise'
       const label = entry.chosenExercise
         ? `${name} (${entry.chosenCategory}): ${entry.chosenExercise} — ${entry.values.join(', ')}`
