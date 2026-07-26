@@ -1,9 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LogLift } from './LogLift'
 import { addExercise } from '../db/exercises'
 import { addSet, getOrCreateExerciseEntry, getOrCreateSessionForDate } from '../db/workouts'
+import { addProgramDay, addProgramWeek, createProgram } from '../db/programs'
+import { addProgramExercise, addProgramPrescription } from '../db/programExercises'
+
+vi.mock('../lib/dates', () => ({ todayIso: () => '2026-07-20' }))
 
 describe('LogLift', () => {
   it('shows last session reference and lets the user log a new PR set', async () => {
@@ -93,5 +97,48 @@ describe('LogLift', () => {
 
     expect(screen.queryByText(/pr!/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/135/)).not.toBeInTheDocument()
+  })
+
+  async function seedTestProgramDay(dayNumber: number, exerciseId: number) {
+    const programId = await createProgram('Test Program', '2026-07-20', '2026-07-24')
+    await addProgramWeek(programId, 1, '2026-07-20', '2026-07-24')
+    const dayId = await addProgramDay(programId, dayNumber)
+    const slotId = await addProgramExercise({
+      dayId,
+      exerciseId,
+      blockLabel: 'B',
+      orderIndex: 0,
+      measureType: 'weight',
+      eachSide: false,
+      tempo: '4/1/0',
+    })
+    await addProgramPrescription({
+      programExerciseId: slotId,
+      weekNumber: 1,
+      rir: 'M',
+      warmupTargets: [5, 4],
+      workingTargets: [3, 3, 3, 5],
+      isTest: false,
+    })
+    return { programId, dayId, slotId }
+  }
+
+  it('shows the program day section with a slot when today has an active program day', async () => {
+    const exerciseId = await addExercise('Test Program Front Squat')
+    await seedTestProgramDay(1, exerciseId) // 2026-07-20 is a Monday = dayNumber 1
+
+    render(<LogLift />)
+
+    expect(await screen.findByText('Test Program Front Squat')).toBeInTheDocument()
+    expect(screen.getByText(/Tempo: 4\/1\/0/)).toBeInTheDocument()
+  })
+
+  it('still shows the free-form "Log something else" section on a program day', async () => {
+    const exerciseId = await addExercise('Test Program Bench')
+    await seedTestProgramDay(1, exerciseId)
+
+    render(<LogLift />)
+
+    expect(await screen.findByText(/log something else/i)).toBeInTheDocument()
   })
 })

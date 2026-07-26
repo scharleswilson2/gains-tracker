@@ -1,15 +1,11 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { addExercise, listExercises } from '../db/exercises'
-import {
-  addSet,
-  flattenHistorySets,
-  getExerciseHistory,
-  getLastSessionSets,
-  getOrCreateExerciseEntry,
-  getOrCreateSessionForDate,
-} from '../db/workouts'
-import { detectPr } from '../lib/prDetection'
+import { getExerciseHistory, getLastSessionSets } from '../db/workouts'
+import { getActiveProgramDay } from '../db/programs'
+import { getDaySlots, groupSlotsByBlock } from '../db/programExercises'
+import { ProgramSlotCard } from '../components/ProgramSlotCard'
+import { logWeightSet } from '../lib/logWeightSet'
 import { todayIso } from '../lib/dates'
 
 export function LogLift() {
@@ -22,6 +18,12 @@ export function LogLift() {
   const [rpe, setRpe] = useState('')
   const [prMessage, setPrMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const activeDay = useLiveQuery(() => getActiveProgramDay(today), [today])
+  const slots = useLiveQuery(
+    () => (activeDay ? getDaySlots(activeDay.day.id!, activeDay.week.weekNumber) : Promise.resolve([])),
+    [activeDay]
+  ) ?? []
 
   const allExercises = useLiveQuery(() => listExercises(), []) ?? []
   const matches =
@@ -60,17 +62,13 @@ export function LogLift() {
 
     setIsSubmitting(true)
     try {
-      // Everything already in history logically happened "before" this new
-      // set — including earlier sets logged today in this same session —
-      // since the new set has not been persisted yet. Same computation
-      // Progress.tsx uses for its retroactive PR list (via flattenHistorySets).
-      const priorHistory = await getExerciseHistory(selectedExerciseId)
-      const priorSets = flattenHistorySets(priorHistory)
-      const pr = detectPr({ weightLbs, reps: repsNum }, priorSets)
-
-      const sessionId = await getOrCreateSessionForDate(today)
-      const entryId = await getOrCreateExerciseEntry(sessionId, selectedExerciseId)
-      await addSet(entryId, weightLbs, repsNum, rpeNum)
+      const pr = await logWeightSet({
+        exerciseId: selectedExerciseId,
+        date: today,
+        weightLbs,
+        reps: repsNum,
+        rpe: rpeNum,
+      })
 
       setWeight('')
       setReps('')
@@ -81,9 +79,40 @@ export function LogLift() {
     }
   }
 
+  // `activeDay === undefined` means the live query hasn't resolved yet;
+  // `null` means resolved with "no program today" — both are valid states
+  // to render the free-form-only screen below, so there's no loading gate
+  // needed here (unlike Progress's exercise picker, nothing downstream of
+  // `activeDay` requires synchronous option-list presence for tests).
+
   return (
     <div>
       <h1>Log Lift</h1>
+
+      {activeDay && (
+        <section>
+          <h2>
+            Day {activeDay.day.dayNumber} — Week {activeDay.week.weekNumber}
+          </h2>
+          {activeDay.day.note && <p>{activeDay.day.note}</p>}
+          {groupSlotsByBlock(slots).map(([blockLabel, blockSlots]) => (
+            <div key={blockLabel}>
+              <h3>{blockLabel}</h3>
+              {blockSlots.map((slot) => (
+                <ProgramSlotCard
+                  key={slot.programExercise.id}
+                  slot={slot}
+                  date={today}
+                  weekNumber={activeDay.week.weekNumber}
+                />
+              ))}
+            </div>
+          ))}
+        </section>
+      )}
+
+      <hr />
+      <h2>Log something else</h2>
 
       <label htmlFor="exercise-input">Exercise</label>
       <input
