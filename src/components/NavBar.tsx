@@ -9,6 +9,9 @@ export function NavBar() {
       <NavLink to="/catching" className={({ isActive }) => (isActive ? 'active' : '')}>
         Log Catching
       </NavLink>
+      <NavLink to="/program" className={({ isActive }) => (isActive ? 'active' : '')}>
+        Program
+      </NavLink>
       <NavLink to="/progress" className={({ isActive }) => (isActive ? 'active' : '')}>
         Progress
       </NavLink>
