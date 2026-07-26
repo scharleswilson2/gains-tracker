@@ -3,16 +3,27 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import type { ResolvedSlot } from '../db/programExercises'
 import { SlotHeader } from './SlotHeader'
 import { logWeightSet } from '../lib/logWeightSet'
+import { getLastWeekWeightResult } from '../db/workouts'
 import {
   appendProgramLogValue,
+  getLastWeekCategoryValue,
+  getLastWeekSimpleValue,
   getProgramLogEntriesForDate,
   logCategoryChoice,
 } from '../db/programLogEntries'
+import { compareSimpleValues, compareWeightSets } from '../lib/compareProgress'
+import type { ProgressBadge } from '../lib/compareProgress'
 
 interface ProgramSlotCardProps {
   slot: ResolvedSlot
   date: string
   weekNumber: number
+}
+
+const BADGE_LABEL: Record<ProgressBadge, string> = {
+  beat: 'Beat last week!',
+  matched: 'Matched last week',
+  'fell-short': 'Fell short of last week',
 }
 
 export function ProgramSlotCard({ slot, date, weekNumber }: ProgramSlotCardProps) {
@@ -45,6 +56,29 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const [prMessage, setPrMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const hasWarmupTargets = (slot.prescription?.warmupTargets.length ?? 0) > 0
+
+  const exerciseId = slot.programExercise.exerciseId
+  const programExerciseId = slot.programExercise.id!
+  const targetReps =
+    slot.prescription && slot.prescription.workingTargets.length > 0
+      ? slot.prescription.workingTargets[slot.prescription.workingTargets.length - 1]
+      : null
+
+  // Called with the current weekNumber here, and weekNumber - 1 below —
+  // "last week" describes the function's primary use, not a hardcoded
+  // offset, so it doubles as "this week's" result too.
+  const thisWeekResult = useLiveQuery(
+    () => getLastWeekWeightResult(exerciseId, programExerciseId, weekNumber),
+    [exerciseId, programExerciseId, weekNumber]
+  )
+  const lastWeekResult = useLiveQuery(
+    () => getLastWeekWeightResult(exerciseId, programExerciseId, weekNumber - 1),
+    [exerciseId, programExerciseId, weekNumber]
+  )
+  const progressBadge =
+    thisWeekResult && lastWeekResult
+      ? compareWeightSets(thisWeekResult, lastWeekResult, targetReps)
+      : null
 
   async function handleAddSet() {
     if (isSubmitting) return
@@ -82,6 +116,11 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
 
   return (
     <div>
+      {lastWeekResult && (
+        <p>
+          Last week: {lastWeekResult.weightLbs} lbs x {lastWeekResult.reps}
+        </p>
+      )}
       <label htmlFor={weightId}>Weight (lbs)</label>
       <input id={weightId} type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
       <label htmlFor={repsId}>Reps</label>
@@ -103,6 +142,7 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
         Add Set
       </button>
       {prMessage && <p role="status">{prMessage}</p>}
+      {progressBadge && <p role="status">{BADGE_LABEL[progressBadge]}</p>}
     </div>
   )
 }
@@ -119,6 +159,14 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   ) ?? []
   const loggedValues = entries.find((e) => e.chosenCategory === undefined)?.values ?? []
 
+  const lastWeekValue = useLiveQuery(
+    () => getLastWeekSimpleValue(programExerciseId, weekNumber - 1),
+    [programExerciseId, weekNumber]
+  )
+  const thisWeekLastValue = loggedValues.length > 0 ? loggedValues[loggedValues.length - 1] : undefined
+  const progressBadge =
+    thisWeekLastValue !== undefined ? compareSimpleValues(thisWeekLastValue, lastWeekValue) : null
+
   async function handleAdd() {
     const numValue = Number(value)
     if (!Number.isFinite(numValue) || numValue <= 0) return
@@ -130,11 +178,13 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
 
   return (
     <div>
+      {lastWeekValue !== undefined && <p>Last week: {lastWeekValue}</p>}
       <label htmlFor={valueId}>Value</label>
       <input id={valueId} type="number" value={value} onChange={(e) => setValue(e.target.value)} />
       <button type="button" onClick={handleAdd}>
         Add Set
       </button>
+      {progressBadge && <p role="status">{BADGE_LABEL[progressBadge]}</p>}
       <ul>
         {loggedValues.map((v, i) => (
           <li key={i}>{v}</li>
@@ -163,6 +213,23 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
   // `logCategoryChoice`, so a stale snapshot here can never let an extra
   // category through; `rejectedByCap` surfaces a write the DB turned away.
   const capReached = loggedCategories.length >= categoriesToPick
+
+  const lastWeekCategoryValue = useLiveQuery(
+    () =>
+      selectedCategory
+        ? getLastWeekCategoryValue(programExerciseId, weekNumber - 1, selectedCategory)
+        : Promise.resolve(undefined),
+    [programExerciseId, weekNumber, selectedCategory]
+  )
+  const thisWeekEntry = selectedCategory
+    ? entries.find((e) => e.chosenCategory === selectedCategory)
+    : undefined
+  const thisWeekValue =
+    thisWeekEntry && thisWeekEntry.values.length > 0
+      ? thisWeekEntry.values[thisWeekEntry.values.length - 1]
+      : undefined
+  const progressBadge =
+    thisWeekValue !== undefined ? compareSimpleValues(thisWeekValue, lastWeekCategoryValue) : null
 
   async function handleSave() {
     if (isSubmitting) return
@@ -215,6 +282,11 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
       </div>
       {selectedCategory && (
         <div>
+          {lastWeekCategoryValue !== undefined && (
+            <p>
+              Last week ({selectedCategory}): {lastWeekCategoryValue}
+            </p>
+          )}
           <label htmlFor={`exercise-${programExerciseId}`}>Exercise</label>
           <select
             id={`exercise-${programExerciseId}`}
@@ -242,6 +314,7 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
           <button type="button" onClick={handleSave} disabled={isSubmitting}>
             Save
           </button>
+          {progressBadge && <p role="status">{BADGE_LABEL[progressBadge]}</p>}
           {loggedCategories.includes(selectedCategory) && <p>{selectedCategory} logged</p>}
         </div>
       )}
