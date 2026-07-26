@@ -1,9 +1,13 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import type { ResolvedSlot } from '../db/programExercises'
-import { ExerciseInfo } from './ExerciseInfo'
+import { SlotHeader } from './SlotHeader'
 import { logWeightSet } from '../lib/logWeightSet'
-import { getProgramLogEntriesForDate, upsertProgramLogEntry } from '../db/programLogEntries'
+import {
+  appendProgramLogValue,
+  getProgramLogEntriesForDate,
+  logCategoryChoice,
+} from '../db/programLogEntries'
 
 interface ProgramSlotCardProps {
   slot: ResolvedSlot
@@ -11,25 +15,12 @@ interface ProgramSlotCardProps {
   weekNumber: number
 }
 
-function targetSummary(slot: ResolvedSlot): string {
-  const { prescription } = slot
-  if (!prescription) return ''
-  if (prescription.isTest) return 'TEST'
-  const parts: string[] = []
-  if (prescription.warmupTargets.length > 0) parts.push(`Warmup: ${prescription.warmupTargets.join(', ')}`)
-  if (prescription.workingTargets.length > 0) parts.push(`Working: ${prescription.workingTargets.join(', ')}`)
-  return parts.join(' | ')
-}
-
 export function ProgramSlotCard({ slot, date, weekNumber }: ProgramSlotCardProps) {
-  const { programExercise, prescription } = slot
+  const { programExercise } = slot
 
   return (
     <div>
-      <ExerciseInfo name={slot.exerciseName} />
-      {programExercise.tempo && <span> Tempo: {programExercise.tempo}</span>}
-      {prescription?.rir && <span> RIR: {prescription.rir}</span>}
-      <p>{targetSummary(slot)}</p>
+      <SlotHeader slot={slot} />
 
       {programExercise.measureType === 'weight' && (
         <WeightSlotForm slot={slot} date={date} weekNumber={weekNumber} />
@@ -118,34 +109,21 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
 
 function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const [value, setValue] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const programExerciseId = slot.programExercise.id!
 
+  // Read only — the write path never derives its next state from this
+  // snapshot, so a stale live-query result cannot cause a lost value.
   const entries = useLiveQuery(
     () => getProgramLogEntriesForDate(programExerciseId, date),
     [programExerciseId, date]
   ) ?? []
-  const loggedValues = entries[0]?.values ?? []
+  const loggedValues = entries.find((e) => e.chosenCategory === undefined)?.values ?? []
 
   async function handleAdd() {
-    if (isSubmitting) return
     const numValue = Number(value)
     if (!Number.isFinite(numValue) || numValue <= 0) return
-    setIsSubmitting(true)
-    try {
-      const nextValues = [...loggedValues, numValue]
-      const nextIsWarmup = [...(entries[0]?.isWarmup ?? []), false]
-      await upsertProgramLogEntry({
-        programExerciseId,
-        date,
-        weekNumber,
-        values: nextValues,
-        isWarmup: nextIsWarmup,
-      })
-      setValue('')
-    } finally {
-      setIsSubmitting(false)
-    }
+    setValue('')
+    await appendProgramLogValue(programExerciseId, date, weekNumber, numValue)
   }
 
   const valueId = `value-${programExerciseId}`
@@ -154,7 +132,7 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
     <div>
       <label htmlFor={valueId}>Value</label>
       <input id={valueId} type="number" value={value} onChange={(e) => setValue(e.target.value)} />
-      <button type="button" onClick={handleAdd} disabled={isSubmitting}>
+      <button type="button" onClick={handleAdd}>
         Add Set
       </button>
       <ul>
@@ -171,6 +149,7 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
   const [selectedExercise, setSelectedExercise] = useState('')
   const [value, setValue] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [rejectedByCap, setRejectedByCap] = useState(false)
   const programExerciseId = slot.programExercise.id!
   const categoryOptions = slot.programExercise.categoryOptions ?? []
 
@@ -180,6 +159,9 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
   ) ?? []
   const loggedCategories = entries.map((e) => e.chosenCategory).filter(Boolean)
   const categoriesToPick = slot.programExercise.categoriesToPick ?? categoryOptions.length
+  // Display-only hint. The cap itself is enforced atomically inside
+  // `logCategoryChoice`, so a stale snapshot here can never let an extra
+  // category through; `rejectedByCap` surfaces a write the DB turned away.
   const capReached = loggedCategories.length >= categoriesToPick
 
   async function handleSave() {
@@ -188,16 +170,17 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
     if (!selectedCategory || !selectedExercise || !Number.isFinite(numValue) || numValue <= 0) return
     setIsSubmitting(true)
     try {
-      await upsertProgramLogEntry({
+      const result = await logCategoryChoice({
         programExerciseId,
         date,
         weekNumber,
-        values: [numValue],
-        isWarmup: [false],
+        value: numValue,
         chosenCategory: selectedCategory,
         chosenExercise: selectedExercise,
+        categoriesToPick,
       })
-      setValue('')
+      setRejectedByCap(!result.ok)
+      if (result.ok) setValue('')
     } finally {
       setIsSubmitting(false)
     }
@@ -206,7 +189,7 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
   return (
     <div>
       <p>Logged today: {loggedCategories.length > 0 ? loggedCategories.join(', ') : 'none'}</p>
-      {capReached && (
+      {(capReached || rejectedByCap) && (
         <p>
           You've logged {categoriesToPick} categories today — the max for this exercise
         </p>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { getCurrentProgramWeek, listPrograms, listProgramDays } from '../db/programs'
 import { getDaySlots, groupSlotsByBlock } from '../db/programExercises'
-import { ExerciseInfo } from '../components/ExerciseInfo'
+import { SlotHeader } from '../components/SlotHeader'
 import { todayIso } from '../lib/dates'
 
 export function Program() {
@@ -75,25 +75,7 @@ export function Program() {
             <div key={blockLabel}>
               <h4>{blockLabel}</h4>
               {blockSlots.map((slot) => (
-                <div key={slot.programExercise.id}>
-                  <ExerciseInfo name={slot.exerciseName} />
-                  {slot.programExercise.tempo && <span> Tempo: {slot.programExercise.tempo}</span>}
-                  {slot.prescription?.rir && <span> RIR: {slot.prescription.rir}</span>}
-                  <p>
-                    {slot.prescription?.isTest
-                      ? 'TEST'
-                      : [
-                          slot.prescription && slot.prescription.warmupTargets.length > 0
-                            ? `Warmup: ${slot.prescription.warmupTargets.join(', ')}`
-                            : '',
-                          slot.prescription && slot.prescription.workingTargets.length > 0
-                            ? `Working: ${slot.prescription.workingTargets.join(', ')}`
-                            : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' | ')}
-                  </p>
-                </div>
+                <SlotHeader key={slot.programExercise.id} slot={slot} />
               ))}
             </div>
           ))}
