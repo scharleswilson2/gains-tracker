@@ -12,8 +12,8 @@ import {
   YAxis,
 } from 'recharts'
 import { db } from '../db/schema'
-import { listExercises } from '../db/exercises'
-import { flattenHistorySets, getExerciseHistory } from '../db/workouts'
+import { listExercisesWithHistory } from '../db/exercises'
+import { flattenHistorySets, getWorkingSetHistory } from '../db/workouts'
 import { estimateOneRepMax } from '../lib/oneRepMax'
 import { detectPr } from '../lib/prDetection'
 import { popTimeStats, successRate } from '../db/catching'
@@ -25,11 +25,11 @@ export function Progress() {
   const [metric, setMetric] = useState<'weight' | 'estimated1rm'>('weight')
   const [bodyweightInput, setBodyweightInput] = useState('')
 
-  const exercisesQuery = useLiveQuery(() => listExercises(), [])
+  const exercisesQuery = useLiveQuery(() => listExercisesWithHistory(), [])
   const exercises = exercisesQuery ?? []
 
   const history = useLiveQuery(
-    () => (selectedExerciseId ? getExerciseHistory(selectedExerciseId) : Promise.resolve([])),
+    () => (selectedExerciseId ? getWorkingSetHistory(selectedExerciseId) : Promise.resolve([])),
     [selectedExerciseId]
   ) ?? []
 
@@ -175,6 +175,23 @@ export function Progress() {
                   {pr.date}: {pr.weightLbs} x {pr.reps}
                 </li>
               ))}
+            </ul>
+
+            <h3>Sessions</h3>
+            <ul>
+              {history.map((h) => {
+                const topSet = h.sets.reduce(
+                  (best, s) => (s.weightLbs > (best?.weightLbs ?? 0) ? s : best),
+                  h.sets[0]
+                )
+                return (
+                  <li key={h.date}>
+                    {h.date}
+                    {h.weekNumber ? ` (Wk ${h.weekNumber})` : ''} — top set: {topSet?.weightLbs} lbs x{' '}
+                    {topSet?.reps} reps
+                  </li>
+                )
+              })}
             </ul>
           </>
         )}

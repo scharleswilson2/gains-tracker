@@ -50,4 +50,25 @@ describe('Progress', () => {
     expect(await screen.findByText(/2026-07-24: 205 x 5/)).toBeInTheDocument()
     expect(screen.queryByText(/2026-07-24: 185 x 5/)).not.toBeInTheDocument()
   })
+
+  it('does not include exercises with no logged history in the picker', async () => {
+    await addExercise('Test Never Logged')
+    render(<Progress />)
+    await screen.findByLabelText(/select exercise/i)
+    expect(screen.queryByText('Test Never Logged')).not.toBeInTheDocument()
+  })
+
+  it('excludes warmup sets from the PR list and shows a week label on sessions', async () => {
+    const user = userEvent.setup()
+    const exerciseId = await addExercise('Test Warmup Squat')
+    const session1 = await getOrCreateSessionForDate('2026-06-29')
+    const entry1 = await getOrCreateExerciseEntry(session1, exerciseId, undefined, 1)
+    await addSet(entry1, 315, 5, undefined, true) // warmup — would look like a huge "PR" if counted
+
+    render(<Progress />)
+    await user.selectOptions(await screen.findByLabelText(/select exercise/i), 'Test Warmup Squat')
+
+    expect(screen.queryByText(/315 x 5/)).not.toBeInTheDocument() // never shows in PR list
+    expect(screen.queryByText(/Wk 1/)).not.toBeInTheDocument() // no working sets at all yet, no session row either
+  })
 })
