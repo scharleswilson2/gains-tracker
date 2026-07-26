@@ -47,7 +47,7 @@ export async function upsertProgramLogEntry(input: AddProgramLogEntryInput): Pro
       )
       .first()
     if (existing) {
-      await db.programLogEntries.update(existing.id!, input)
+      await db.programLogEntries.update(existing.id!, input as Partial<ProgramLogEntry>)
       return existing.id!
     }
     return db.programLogEntries.add(input)
