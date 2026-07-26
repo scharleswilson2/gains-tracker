@@ -4,6 +4,8 @@ import {
   appendProgramLogValue,
   getProgramLogEntries,
   getProgramLogEntriesForDate,
+  getLastWeekSimpleValue,
+  getLastWeekCategoryValue,
   logCategoryChoice,
   upsertProgramLogEntry,
 } from './programLogEntries'
@@ -248,5 +250,45 @@ describe('logCategoryChoice', () => {
     expect(results.filter((r) => !r.ok)).toHaveLength(1)
     const entries = await getProgramLogEntriesForDate(31, '2026-07-06')
     expect(entries).toHaveLength(3)
+  })
+})
+
+describe('getLastWeekSimpleValue', () => {
+  it('returns the last value logged for the slot at that week', async () => {
+    await upsertProgramLogEntry({
+      programExerciseId: 40,
+      date: '2026-07-13',
+      weekNumber: 2,
+      values: [10, 12, 15],
+      isWarmup: [false, false, false],
+    })
+    const result = await getLastWeekSimpleValue(40, 2)
+    expect(result).toBe(15)
+  })
+
+  it('returns undefined when nothing was logged for that slot/week', async () => {
+    const result = await getLastWeekSimpleValue(999, 1)
+    expect(result).toBeUndefined()
+  })
+})
+
+describe('getLastWeekCategoryValue', () => {
+  it('returns the last value for the matching category at that week', async () => {
+    await logCategoryChoice({
+      programExerciseId: 41,
+      date: '2026-07-13',
+      weekNumber: 2,
+      value: 12,
+      chosenCategory: 'Triceps',
+      chosenExercise: 'Cable Push Downs',
+      categoriesToPick: 3,
+    })
+    const result = await getLastWeekCategoryValue(41, 2, 'Triceps')
+    expect(result).toBe(12)
+  })
+
+  it('returns undefined when that category was not logged that week', async () => {
+    const result = await getLastWeekCategoryValue(999, 1, 'Biceps')
+    expect(result).toBeUndefined()
   })
 })

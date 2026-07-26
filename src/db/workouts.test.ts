@@ -6,6 +6,7 @@ import {
   flattenHistorySets,
   getExerciseHistory,
   getLastSessionSets,
+  getLastWeekWeightResult,
   getOrCreateExerciseEntry,
   getOrCreateSessionForDate,
   getWorkingSetHistory,
@@ -209,4 +210,45 @@ it('getOrCreateExerciseEntry backfills a program tag onto an existing untagged e
   const entry = await db.exerciseEntries.get(entryId1)
   expect(entry?.programExerciseId).toBe(42)
   expect(entry?.weekNumber).toBe(2)
+})
+
+describe('getLastWeekWeightResult', () => {
+  it('returns the last logged set for the given slot and week', async () => {
+    const exerciseId = await addExercise('Test Front Squat Progress')
+    const session = await getOrCreateSessionForDate('2026-07-13')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 10, 3)
+    await addSet(entry, 205, 5)
+    await addSet(entry, 215, 3)
+
+    const result = await getLastWeekWeightResult(exerciseId, 10, 3)
+    expect(result?.weightLbs).toBe(215)
+    expect(result?.reps).toBe(3)
+  })
+
+  it('excludes warmup sets even if logged last', async () => {
+    const exerciseId = await addExercise('Test Warmup Excluded Progress')
+    const session = await getOrCreateSessionForDate('2026-07-13')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 11, 3)
+    await addSet(entry, 205, 5)
+    await addSet(entry, 45, 8, undefined, true) // warmup, logged last
+
+    const result = await getLastWeekWeightResult(exerciseId, 11, 3)
+    expect(result?.weightLbs).toBe(205)
+  })
+
+  it('returns null when nothing was logged for that slot/week', async () => {
+    const exerciseId = await addExercise('Test Nothing Logged Progress')
+    const result = await getLastWeekWeightResult(exerciseId, 999, 1)
+    expect(result).toBeNull()
+  })
+
+  it('does not match a different programExerciseId for the same exercise', async () => {
+    const exerciseId = await addExercise('Test Shared Exercise Progress')
+    const session = await getOrCreateSessionForDate('2026-07-13')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 12, 3)
+    await addSet(entry, 300, 2)
+
+    const result = await getLastWeekWeightResult(exerciseId, 13, 3)
+    expect(result).toBeNull()
+  })
 })

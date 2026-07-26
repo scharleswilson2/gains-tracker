@@ -158,3 +158,30 @@ export async function upsertProgramLogEntry(input: AddProgramLogEntryInput): Pro
     return db.programLogEntries.add(input)
   })
 }
+
+export async function getLastWeekSimpleValue(
+  programExerciseId: number,
+  weekNumber: number
+): Promise<number | undefined> {
+  const entry = await db.programLogEntries
+    .where('programExerciseId')
+    .equals(programExerciseId)
+    .and((e) => e.weekNumber === weekNumber && e.chosenCategory === undefined)
+    .first()
+  if (!entry || entry.values.length === 0) return undefined
+  return entry.values[entry.values.length - 1]
+}
+
+export async function getLastWeekCategoryValue(
+  programExerciseId: number,
+  weekNumber: number,
+  category: string
+): Promise<number | undefined> {
+  const entry = await db.programLogEntries
+    .where('programExerciseId')
+    .equals(programExerciseId)
+    .and((e) => e.weekNumber === weekNumber && e.chosenCategory === category)
+    .first()
+  if (!entry || entry.values.length === 0) return undefined
+  return entry.values[entry.values.length - 1]
+}

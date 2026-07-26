@@ -95,3 +95,24 @@ export async function getWorkingSetHistory(exerciseId: number): Promise<Exercise
 export function flattenHistorySets(history: ExerciseHistoryEntry[]): SetRecord[] {
   return history.flatMap((h) => h.sets)
 }
+
+export async function getLastWeekWeightResult(
+  exerciseId: number,
+  programExerciseId: number,
+  weekNumber: number
+): Promise<SetRecord | null> {
+  const entries = await db.exerciseEntries
+    .where('exerciseId')
+    .equals(exerciseId)
+    .and((e) => e.programExerciseId === programExerciseId && e.weekNumber === weekNumber)
+    .toArray()
+  if (entries.length === 0) return null
+
+  const sets: SetRecord[] = []
+  for (const entry of entries) {
+    const entrySets = await db.sets.where('exerciseEntryId').equals(entry.id!).toArray()
+    sets.push(...workingSetsOnly(entrySets))
+  }
+  if (sets.length === 0) return null
+  return sets[sets.length - 1]
+}
