@@ -1,4 +1,5 @@
-import { addExercise } from './exercises'
+import { db } from './schema'
+import { addExercise, findExerciseByName } from './exercises'
 
 export const EXERCISE_DESCRIPTIONS: Record<string, string> = {
   'Depth Drop': 'Step off a box and land on both feet, absorbing the impact and holding the landing position ("sticking it") without any extra movement. Trains reactive strength and landing mechanics.',
@@ -55,6 +56,17 @@ export const EXERCISE_DESCRIPTIONS: Record<string, string> = {
 
 export async function seedExerciseGlossary(): Promise<void> {
   for (const [name, description] of Object.entries(EXERCISE_DESCRIPTIONS)) {
+    const existing = await findExerciseByName(name)
+    if (existing) {
+      // Backfill a description onto a pre-existing exercise (e.g. one the
+      // user already logged free-form, or one restored via Import) only if
+      // it doesn't already have one. A user-provided description (from a
+      // future edit feature) is never overwritten by a reseed.
+      if (!existing.description) {
+        await db.exercises.update(existing.id!, { description })
+      }
+      continue
+    }
     await addExercise(name, undefined, description)
   }
 }

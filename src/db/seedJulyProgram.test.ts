@@ -1,10 +1,19 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { db } from './schema'
 import { getActiveProgramDay } from './programs'
 import { getDaySlots } from './programExercises'
 import { ensureJulyProgramSeeded } from './seedJulyProgram'
+import { seedExerciseGlossary } from './exerciseGlossary'
 
 describe('ensureJulyProgramSeeded', () => {
+  // ensureJulyProgramSeeded no longer seeds the exercise glossary itself
+  // (that now runs independently on every app startup, see main.tsx), so
+  // tests must seed the glossary first, same as production wiring does.
+  beforeEach(async () => {
+    await seedExerciseGlossary()
+  })
+
+
   it('creates exactly one program, 4 weeks, 4 days, 32 exercise slots, 128 prescriptions', async () => {
     await ensureJulyProgramSeeded()
     expect(await db.programs.count()).toBe(1)

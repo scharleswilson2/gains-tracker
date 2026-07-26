@@ -2,7 +2,6 @@ import { db } from './schema'
 import type { MeasureType, Rir } from './schema'
 import { addProgramDay, addProgramWeek, createProgram } from './programs'
 import { addProgramExercise, addProgramPrescription } from './programExercises'
-import { seedExerciseGlossary } from './exerciseGlossary'
 import { findExerciseByName } from './exercises'
 
 const PROGRAM_NAME = 'June 29 – July 24, 2026'
@@ -409,8 +408,6 @@ export async function ensureJulyProgramSeeded(): Promise<void> {
     'rw',
     [db.programs, db.programWeeks, db.programDays, db.programExercises, db.programPrescriptions, db.exercises],
     async () => {
-      await seedExerciseGlossary()
-
       const programId = await createProgram(PROGRAM_NAME, '2026-06-29', '2026-07-24')
       for (const weekNumber of ALL_WEEKS) {
         const range = WEEK_DATE_RANGES[weekNumber]
