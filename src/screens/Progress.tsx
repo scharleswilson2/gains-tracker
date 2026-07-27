@@ -17,13 +17,10 @@ import { flattenHistorySets, getWorkingSetHistory } from '../db/workouts'
 import { estimateOneRepMax } from '../lib/oneRepMax'
 import { detectPr } from '../lib/prDetection'
 import { popTimeStats, successRate } from '../db/catching'
-import { addBodyweightEntry, listBodyweightEntries } from '../db/bodyweight'
-import { todayIso } from '../lib/dates'
 
 export function Progress() {
   const [selectedExerciseId, setSelectedExerciseId] = useState<number | null>(null)
   const [metric, setMetric] = useState<'weight' | 'estimated1rm'>('weight')
-  const [bodyweightInput, setBodyweightInput] = useState('')
 
   const exercisesQuery = useLiveQuery(() => listExercisesWithHistory(), [])
   const exercises = exercisesQuery ?? []
@@ -93,8 +90,6 @@ export function Progress() {
     return rows
   }, [catchingSessions]) ?? []
 
-  const bodyweightEntries = useLiveQuery(() => listBodyweightEntries(), []) ?? []
-
   // All hooks above run unconditionally every render (Rules of Hooks). This
   // gate only affects which JSX is returned — it waits for the exercise list
   // specifically, since `userEvent.selectOptions` (used in tests, and
@@ -107,12 +102,6 @@ export function Progress() {
         <p>Loading...</p>
       </div>
     )
-  }
-
-  async function logBodyweight() {
-    if (!bodyweightInput) return
-    await addBodyweightEntry(todayIso(), Number(bodyweightInput))
-    setBodyweightInput('')
   }
 
   return (
@@ -223,36 +212,6 @@ export function Progress() {
             <Bar dataKey="framingRate" fill="#9333ea" />
           </BarChart>
         </ResponsiveContainer>
-      </section>
-
-      <section>
-        <h2>Bodyweight</h2>
-        <label htmlFor="bodyweight-input">Bodyweight (lbs)</label>
-        <input
-          id="bodyweight-input"
-          type="number"
-          value={bodyweightInput}
-          onChange={(e) => setBodyweightInput(e.target.value)}
-        />
-        <button type="button" onClick={logBodyweight}>
-          Log Bodyweight
-        </button>
-        <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={bodyweightEntries}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis domain={['dataMin - 5', 'dataMax + 5']} />
-            <Tooltip />
-            <Line type="monotone" dataKey="weightLbs" stroke="#0891b2" />
-          </LineChart>
-        </ResponsiveContainer>
-        <ul>
-          {bodyweightEntries.map((b) => (
-            <li key={b.id}>
-              {b.date}: {b.weightLbs}
-            </li>
-          ))}
-        </ul>
       </section>
     </div>
   )

@@ -6,7 +6,7 @@ import { addExercise } from '../db/exercises'
 import { addSet, getOrCreateExerciseEntry, getOrCreateSessionForDate } from '../db/workouts'
 
 describe('Progress', () => {
-  it('shows PRs for a selected exercise and lets me log bodyweight', async () => {
+  it('shows PRs for a selected exercise', async () => {
     const user = userEvent.setup()
 
     const exerciseId = await addExercise('Back Squat')
@@ -22,11 +22,6 @@ describe('Progress', () => {
     await user.selectOptions(await screen.findByLabelText(/select exercise/i), 'Back Squat')
 
     expect(await screen.findByText(/235 x 5/)).toBeInTheDocument()
-
-    await user.type(screen.getByLabelText(/bodyweight/i), '190')
-    await user.click(screen.getByRole('button', { name: /log bodyweight/i }))
-
-    expect(await screen.findByText(/190/)).toBeInTheDocument()
   })
 
   it('flags a later same-day set as a PR against an earlier same-day set, but not the earlier one', async () => {
