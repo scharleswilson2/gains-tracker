@@ -159,6 +159,7 @@ export async function upsertProgramLogEntry(input: AddProgramLogEntryInput): Pro
   })
 }
 
+// Assumes `isWarmup` is never true on the entries it reads — currently always the case, since `appendProgramLogValue` and `logCategoryChoice` hardcode `isWarmup: false` for every value they add; if a warmup toggle is ever added for these simple/category log entries, this must start filtering warmups out the way `getLastWeekWeightResult` already does for weight sets.
 async function lastValueForMatchingEntry(
   programExerciseId: number,
   weekNumber: number,
