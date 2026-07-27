@@ -182,7 +182,7 @@ describe('ProgramSlotCard', () => {
 
     const slot = makeSlot(
       { id: 50, exerciseId, measureType: 'weight' },
-      { id: 1, programExerciseId: 50, weekNumber: 4, rir: 'M', warmupTargets: [], workingTargets: [3, 3, 3, 5], isTest: false }
+      { id: 1, programExerciseId: 50, weekNumber: 4, rir: 'M', warmupTargets: [], workingTargets: [5], isTest: false }
     )
 
     render(<ProgramSlotCard slot={slot} date="2026-07-20" weekNumber={4} />)
@@ -205,7 +205,7 @@ describe('ProgramSlotCard', () => {
 
     const slot = makeSlot(
       { id: 51, exerciseId, measureType: 'weight' },
-      { id: 2, programExerciseId: 51, weekNumber: 4, rir: 'M', warmupTargets: [], workingTargets: [3, 3, 3, 5], isTest: false }
+      { id: 2, programExerciseId: 51, weekNumber: 4, rir: 'M', warmupTargets: [], workingTargets: [5], isTest: false }
     )
 
     render(<ProgramSlotCard slot={slot} date="2026-07-20" weekNumber={4} />)
@@ -226,7 +226,7 @@ describe('ProgramSlotCard', () => {
 
     const slot = makeSlot(
       { id: 52, exerciseId, measureType: 'weight' },
-      { id: 3, programExerciseId: 52, weekNumber: 4, rir: 'M', warmupTargets: [], workingTargets: [3, 3, 3, 5], isTest: false }
+      { id: 3, programExerciseId: 52, weekNumber: 4, rir: 'M', warmupTargets: [], workingTargets: [5], isTest: false }
     )
 
     render(<ProgramSlotCard slot={slot} date="2026-07-20" weekNumber={4} />)
@@ -308,5 +308,39 @@ describe('ProgramSlotCard', () => {
 
     await user.click(screen.getByRole('button', { name: 'Triceps' }))
     expect(await screen.findByText('Last week (Triceps): 10')).toBeInTheDocument()
+  })
+
+  it('hides the progress badge until the full prescribed set count has been logged this week', async () => {
+    const user = userEvent.setup()
+    const exerciseId = await addExercise('Test Deferred Badge Squat')
+    const priorSession = await getOrCreateSessionForDate('2026-07-13')
+    const priorEntry = await getOrCreateExerciseEntry(priorSession, exerciseId, 56, 3)
+    await addSet(priorEntry, 215, 5)
+
+    const slot = makeSlot(
+      { id: 56, exerciseId, measureType: 'weight' },
+      { id: 7, programExerciseId: 56, weekNumber: 4, rir: 'M', warmupTargets: [], workingTargets: [3, 3, 3, 5], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-20" weekNumber={4} />)
+
+    expect(await screen.findByText(/Last week: 215 lbs x 5/)).toBeInTheDocument()
+
+    for (let i = 0; i < 3; i++) {
+      await user.type(screen.getByLabelText(/weight/i), '225')
+      await user.type(screen.getByLabelText(/reps/i), '3')
+      await user.click(screen.getByRole('button', { name: /add set/i }))
+      await waitFor(() => expect(screen.getByRole('button', { name: /add set/i })).not.toBeDisabled())
+    }
+
+    expect(screen.queryByText('Beat last week!')).not.toBeInTheDocument()
+    expect(screen.queryByText('Fell short of last week')).not.toBeInTheDocument()
+    expect(screen.queryByText('Matched last week')).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/weight/i), '225')
+    await user.type(screen.getByLabelText(/reps/i), '5')
+    await user.click(screen.getByRole('button', { name: /add set/i }))
+
+    expect(await screen.findByText('Beat last week!')).toBeInTheDocument()
   })
 })

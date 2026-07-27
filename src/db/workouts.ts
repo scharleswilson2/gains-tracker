@@ -114,5 +114,32 @@ export async function getLastWeekWeightResult(
     sets.push(...workingSetsOnly(entrySets))
   }
   if (sets.length === 0) return null
-  return sets[sets.length - 1]
+
+  // The heaviest set (tie-broken by more reps at the same weight), not the
+  // chronologically last one — a session's working sets are usually logged
+  // in ascending order (e.g. targets [3,3,3,5], same weight throughout,
+  // more reps on the final set), so "heaviest, most reps at that weight"
+  // reliably picks out the set that actually represents the week's effort,
+  // regardless of what order sets were entered in.
+  return sets.reduce((best, s) =>
+    s.weightLbs > best.weightLbs || (s.weightLbs === best.weightLbs && s.reps > best.reps) ? s : best
+  )
+}
+
+export async function getWorkingSetCountForSlotWeek(
+  exerciseId: number,
+  programExerciseId: number,
+  weekNumber: number
+): Promise<number> {
+  const entries = await db.exerciseEntries
+    .where('exerciseId')
+    .equals(exerciseId)
+    .and((e) => e.programExerciseId === programExerciseId && e.weekNumber === weekNumber)
+    .toArray()
+  let count = 0
+  for (const entry of entries) {
+    const entrySets = await db.sets.where('exerciseEntryId').equals(entry.id!).toArray()
+    count += workingSetsOnly(entrySets).length
+  }
+  return count
 }

@@ -9,6 +9,7 @@ import {
   getLastWeekWeightResult,
   getOrCreateExerciseEntry,
   getOrCreateSessionForDate,
+  getWorkingSetCountForSlotWeek,
   getWorkingSetHistory,
   workingSetsOnly,
 } from './workouts'
@@ -213,7 +214,7 @@ it('getOrCreateExerciseEntry backfills a program tag onto an existing untagged e
 })
 
 describe('getLastWeekWeightResult', () => {
-  it('returns the last logged set for the given slot and week', async () => {
+  it('returns the heaviest logged set for the given slot and week', async () => {
     const exerciseId = await addExercise('Test Front Squat Progress')
     const session = await getOrCreateSessionForDate('2026-07-13')
     const entry = await getOrCreateExerciseEntry(session, exerciseId, 10, 3)
@@ -250,5 +251,51 @@ describe('getLastWeekWeightResult', () => {
 
     const result = await getLastWeekWeightResult(exerciseId, 13, 3)
     expect(result).toBeNull()
+  })
+
+  it('returns the heaviest set even when a lighter one was logged last (e.g. a back-off set)', async () => {
+    const exerciseId = await addExercise('Test Heaviest Not Last')
+    const session = await getOrCreateSessionForDate('2026-07-13')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 60, 3)
+    await addSet(entry, 215, 5) // heaviest, logged first
+    await addSet(entry, 205, 3) // lighter, logged last
+
+    const result = await getLastWeekWeightResult(exerciseId, 60, 3)
+    expect(result?.weightLbs).toBe(215)
+    expect(result?.reps).toBe(5)
+  })
+
+  it('breaks ties on weight by preferring more reps', async () => {
+    const exerciseId = await addExercise('Test Tie Break Reps')
+    const session = await getOrCreateSessionForDate('2026-07-13')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 61, 3)
+    await addSet(entry, 215, 4)
+    await addSet(entry, 215, 4)
+    await addSet(entry, 215, 4)
+    await addSet(entry, 215, 5) // same weight, most reps, logged last
+
+    const result = await getLastWeekWeightResult(exerciseId, 61, 3)
+    expect(result?.weightLbs).toBe(215)
+    expect(result?.reps).toBe(5)
+  })
+})
+
+describe('getWorkingSetCountForSlotWeek', () => {
+  it('counts only working (non-warmup) sets for the given slot and week', async () => {
+    const exerciseId = await addExercise('Test Set Count')
+    const session = await getOrCreateSessionForDate('2026-07-13')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 70, 3)
+    await addSet(entry, 45, 5, undefined, true) // warmup, not counted
+    await addSet(entry, 205, 5)
+    await addSet(entry, 205, 4)
+
+    const count = await getWorkingSetCountForSlotWeek(exerciseId, 70, 3)
+    expect(count).toBe(2)
+  })
+
+  it('returns 0 when nothing was logged for that slot/week', async () => {
+    const exerciseId = await addExercise('Test Zero Set Count')
+    const count = await getWorkingSetCountForSlotWeek(exerciseId, 999, 1)
+    expect(count).toBe(0)
   })
 })

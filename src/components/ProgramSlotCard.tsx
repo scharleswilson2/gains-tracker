@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import type { ResolvedSlot } from '../db/programExercises'
 import { SlotHeader } from './SlotHeader'
 import { logWeightSet } from '../lib/logWeightSet'
-import { getLastWeekWeightResult } from '../db/workouts'
+import { getLastWeekWeightResult, getWorkingSetCountForSlotWeek } from '../db/workouts'
 import {
   appendProgramLogValue,
   getLastWeekCategoryValue,
@@ -63,6 +63,12 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
     slot.prescription && slot.prescription.workingTargets.length > 0
       ? slot.prescription.workingTargets[slot.prescription.workingTargets.length - 1]
       : null
+  const targetSetCount = slot.prescription?.workingTargets.length ?? 0
+  const thisWeekSetCount = useLiveQuery(
+    () => getWorkingSetCountForSlotWeek(exerciseId, programExerciseId, weekNumber),
+    [exerciseId, programExerciseId, weekNumber]
+  ) ?? 0
+  const hasCompletedPrescribedSets = targetSetCount > 0 && thisWeekSetCount >= targetSetCount
 
   // Called with the current weekNumber here, and weekNumber - 1 below —
   // "last week" describes the function's primary use, not a hardcoded
@@ -76,7 +82,7 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
     [exerciseId, programExerciseId, weekNumber]
   )
   const progressBadge =
-    thisWeekResult && lastWeekResult
+    hasCompletedPrescribedSets && thisWeekResult && lastWeekResult
       ? compareWeightSets(thisWeekResult, lastWeekResult, targetReps)
       : null
 
