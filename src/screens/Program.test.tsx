@@ -119,5 +119,37 @@ describe('Program', () => {
     const [entry] = await db.exerciseEntries.where('exerciseId').equals(exerciseId).toArray()
     const session = await db.workoutSessions.get(entry.sessionId)
     expect(session?.date).toBe('2026-06-30')
+    expect(entry.programExerciseId).toBe(slotId)
+    expect(entry.weekNumber).toBe(1)
+  })
+
+  it('shows the date and disables logging when the displayed week is not actually live', async () => {
+    const exerciseId = await addExercise('Test Stale Week Exercise')
+    const programId = await createProgram('Ended Program', '2026-06-01', '2026-06-05')
+    await addProgramWeek(programId, 1, '2026-06-01', '2026-06-05')
+    const dayId = await addProgramDay(programId, 1)
+    const slotId = await addProgramExercise({
+      dayId,
+      exerciseId,
+      blockLabel: 'B',
+      orderIndex: 0,
+      measureType: 'weight',
+      eachSide: false,
+      tempo: null,
+    })
+    await addProgramPrescription({
+      programExerciseId: slotId,
+      weekNumber: 1,
+      rir: null,
+      warmupTargets: [],
+      workingTargets: [5],
+      isTest: false,
+    })
+
+    render(<Program />)
+
+    expect(await screen.findByText('Test Stale Week Exercise')).toBeInTheDocument()
+    expect(screen.getByText(/2026-06-01/)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/weight/i)).not.toBeInTheDocument()
   })
 })

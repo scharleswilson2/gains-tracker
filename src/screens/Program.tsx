@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { getCurrentProgramWeek, listPrograms, listProgramDays, listProgramWeeks } from '../db/programs'
 import { getDaySlots, groupSlotsByBlock } from '../db/programExercises'
 import { ProgramSlotCard } from '../components/ProgramSlotCard'
+import { SlotHeader } from '../components/SlotHeader'
 import { addDays, todayIso } from '../lib/dates'
 
 export function Program() {
@@ -25,6 +26,14 @@ export function Program() {
     [activeProgramId]
   ) ?? []
   const activeWeek = activeWeeks.find((w) => w.weekNumber === activeWeekNumber)
+
+  // Only the week whose real date range contains today is "live" — logging
+  // is restricted to it. A week shown via getCurrentProgramWeek's "no
+  // current program" fallback, or via browsing an old program's Week 1, is
+  // historical even though it renders the same way otherwise; without this
+  // check, a stale/expired program would silently accept new sets tagged
+  // with a past date, with no way to undo it.
+  const isLiveWeek = activeWeek ? today >= activeWeek.startDate && today <= activeWeek.endDate : false
 
   const days = useLiveQuery(
     () => (activeProgramId ? listProgramDays(activeProgramId) : Promise.resolve([])),
@@ -75,25 +84,32 @@ export function Program() {
 
       {daySlots.map(({ day, slots }) => {
         // Falls back to today only in the brief window before `activeWeek`
-        // resolves from its own useLiveQuery — settles on the same
-        // reactive tick as everything else here, well before a user could
-        // plausibly log a set against it.
+        // resolves from its own useLiveQuery — this is purely a display
+        // fallback now: `isLiveWeek` defaults to false whenever `activeWeek`
+        // is unresolved, so no card can be interactive during this window
+        // regardless of what date it would momentarily show.
         const dayDate = activeWeek ? addDays(activeWeek.startDate, day.dayNumber - 1) : today
         return (
           <section key={day.id}>
-            <h3>Day {day.dayNumber}</h3>
+            <h3>
+              Day {day.dayNumber} — {dayDate}
+            </h3>
             {day.note && <p>{day.note}</p>}
             {groupSlotsByBlock(slots).map(([blockLabel, blockSlots]) => (
               <div key={blockLabel}>
                 <h4>{blockLabel}</h4>
-                {blockSlots.map((slot) => (
-                  <ProgramSlotCard
-                    key={slot.programExercise.id}
-                    slot={slot}
-                    date={dayDate}
-                    weekNumber={activeWeekNumber}
-                  />
-                ))}
+                {blockSlots.map((slot) =>
+                  isLiveWeek ? (
+                    <ProgramSlotCard
+                      key={slot.programExercise.id}
+                      slot={slot}
+                      date={dayDate}
+                      weekNumber={activeWeekNumber}
+                    />
+                  ) : (
+                    <SlotHeader key={slot.programExercise.id} slot={slot} />
+                  )
+                )}
               </div>
             ))}
           </section>
