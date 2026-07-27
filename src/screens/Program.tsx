@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { getCurrentProgramWeek, listPrograms, listProgramDays } from '../db/programs'
+import { getCurrentProgramWeek, listPrograms, listProgramDays, listProgramWeeks } from '../db/programs'
 import { getDaySlots, groupSlotsByBlock } from '../db/programExercises'
-import { SlotHeader } from '../components/SlotHeader'
-import { todayIso } from '../lib/dates'
+import { ProgramSlotCard } from '../components/ProgramSlotCard'
+import { addDays, todayIso } from '../lib/dates'
 
 export function Program() {
   const today = todayIso()
@@ -19,6 +19,12 @@ export function Program() {
     selectedProgramId && selectedProgramId !== currentProgramWeek?.program.id
       ? 1
       : currentProgramWeek?.week.weekNumber ?? 1
+
+  const activeWeeks = useLiveQuery(
+    () => (activeProgramId ? listProgramWeeks(activeProgramId) : Promise.resolve([])),
+    [activeProgramId]
+  ) ?? []
+  const activeWeek = activeWeeks.find((w) => w.weekNumber === activeWeekNumber)
 
   const days = useLiveQuery(
     () => (activeProgramId ? listProgramDays(activeProgramId) : Promise.resolve([])),
@@ -67,20 +73,32 @@ export function Program() {
 
       <h2>Week {activeWeekNumber}</h2>
 
-      {daySlots.map(({ day, slots }) => (
-        <section key={day.id}>
-          <h3>Day {day.dayNumber}</h3>
-          {day.note && <p>{day.note}</p>}
-          {groupSlotsByBlock(slots).map(([blockLabel, blockSlots]) => (
-            <div key={blockLabel}>
-              <h4>{blockLabel}</h4>
-              {blockSlots.map((slot) => (
-                <SlotHeader key={slot.programExercise.id} slot={slot} />
-              ))}
-            </div>
-          ))}
-        </section>
-      ))}
+      {daySlots.map(({ day, slots }) => {
+        // Falls back to today only in the brief window before `activeWeek`
+        // resolves from its own useLiveQuery — settles on the same
+        // reactive tick as everything else here, well before a user could
+        // plausibly log a set against it.
+        const dayDate = activeWeek ? addDays(activeWeek.startDate, day.dayNumber - 1) : today
+        return (
+          <section key={day.id}>
+            <h3>Day {day.dayNumber}</h3>
+            {day.note && <p>{day.note}</p>}
+            {groupSlotsByBlock(slots).map(([blockLabel, blockSlots]) => (
+              <div key={blockLabel}>
+                <h4>{blockLabel}</h4>
+                {blockSlots.map((slot) => (
+                  <ProgramSlotCard
+                    key={slot.programExercise.id}
+                    slot={slot}
+                    date={dayDate}
+                    weekNumber={activeWeekNumber}
+                  />
+                ))}
+              </div>
+            ))}
+          </section>
+        )
+      })}
     </div>
   )
 }
