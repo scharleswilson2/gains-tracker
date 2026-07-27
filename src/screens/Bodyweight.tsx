@@ -18,7 +18,7 @@ export function Bodyweight() {
   const bodyweightEntries = useLiveQuery(() => listBodyweightEntries(), []) ?? []
 
   async function logBodyweight() {
-    if (!bodyweightInput) return
+    if (!bodyweightInput || Number(bodyweightInput) <= 0) return
     await addBodyweightEntry(todayIso(), Number(bodyweightInput))
     setBodyweightInput('')
   }
@@ -30,28 +30,35 @@ export function Bodyweight() {
       <input
         id="bodyweight-input"
         type="number"
+        min="0"
         value={bodyweightInput}
         onChange={(e) => setBodyweightInput(e.target.value)}
       />
       <button type="button" onClick={logBodyweight}>
         Log Bodyweight
       </button>
-      <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={bodyweightEntries}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="date" />
-          <YAxis domain={['dataMin - 5', 'dataMax + 5']} />
-          <Tooltip />
-          <Line type="monotone" dataKey="weightLbs" stroke="#0891b2" />
-        </LineChart>
-      </ResponsiveContainer>
-      <ul>
-        {bodyweightEntries.map((b) => (
-          <li key={b.id}>
-            {b.date}: {b.weightLbs}
-          </li>
-        ))}
-      </ul>
+      {bodyweightEntries.length === 0 ? (
+        <p>No entries yet</p>
+      ) : (
+        <>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={bodyweightEntries}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis domain={['dataMin - 5', 'dataMax + 5']} />
+              <Tooltip />
+              <Line type="monotone" dataKey="weightLbs" stroke="#0891b2" />
+            </LineChart>
+          </ResponsiveContainer>
+          <ul>
+            {bodyweightEntries.map((b) => (
+              <li key={b.id}>
+                {b.date}: {b.weightLbs}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   )
 }
