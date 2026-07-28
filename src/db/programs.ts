@@ -1,5 +1,6 @@
 import { db } from './schema'
 import type { Program, ProgramWeek, ProgramDay } from './schema'
+import { addDays } from '../lib/dates'
 
 export async function createProgram(
   name: string,
@@ -96,4 +97,52 @@ export async function getCurrentProgramWeek(date: string): Promise<CurrentProgra
   const weeksForLatest = await listProgramWeeks(latestProgram.id!)
   if (weeksForLatest.length === 0) return null
   return { program: latestProgram, week: weeksForLatest[weeksForLatest.length - 1] }
+}
+
+export interface DatedProgramDay {
+  program: Program
+  week: ProgramWeek
+  day: ProgramDay
+  date: string
+}
+
+/**
+ * Every day across every seeded program, each resolved to its concrete
+ * calendar date, sorted ascending. Backs the day-navigation arrows: with
+ * only a handful of ~16-day programs this is a trivial in-memory list, no
+ * pagination needed.
+ */
+export async function listAllProgramDaysChronological(): Promise<DatedProgramDay[]> {
+  const programs = await listPrograms()
+  const result: DatedProgramDay[] = []
+  for (const program of programs) {
+    const weeks = await listProgramWeeks(program.id!)
+    const days = await listProgramDays(program.id!)
+    for (const week of weeks) {
+      for (const day of days) {
+        result.push({
+          program,
+          week,
+          day,
+          date: addDays(week.startDate, day.dayNumber - 1),
+        })
+      }
+    }
+  }
+  result.sort((a, b) => a.date.localeCompare(b.date))
+  return result
+}
+
+/**
+ * The day-navigator's starting index: the day matching today exactly, or
+ * the closest upcoming day, or the last day if today is past everything.
+ * Returns -1 for an empty list (nothing to navigate to).
+ */
+export function findDefaultDayIndex(days: DatedProgramDay[], today: string): number {
+  if (days.length === 0) return -1
+  const exact = days.findIndex((d) => d.date === today)
+  if (exact !== -1) return exact
+  const next = days.findIndex((d) => d.date > today)
+  if (next !== -1) return next
+  return days.length - 1
 }
