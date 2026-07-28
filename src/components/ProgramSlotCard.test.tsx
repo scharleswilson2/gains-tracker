@@ -5,6 +5,7 @@ import { ProgramSlotCard } from './ProgramSlotCard'
 import { addExercise } from '../db/exercises'
 import { getOrCreateSessionForDate, getOrCreateExerciseEntry, addSet } from '../db/workouts'
 import { logCategoryChoice, upsertProgramLogEntry } from '../db/programLogEntries'
+import { db } from '../db/schema'
 import type { ResolvedSlot } from '../db/programExercises'
 
 function makeSlot(overrides: Partial<ResolvedSlot['programExercise']>, prescription: ResolvedSlot['prescription']): ResolvedSlot {
@@ -26,7 +27,7 @@ function makeSlot(overrides: Partial<ResolvedSlot['programExercise']>, prescript
 }
 
 describe('ProgramSlotCard', () => {
-  it('logs a weight set via the weight-type form and shows a PR badge', async () => {
+  it('logs the first prescribed set row and shows a PR badge on that row', async () => {
     const user = userEvent.setup()
     const exerciseId = await addExercise('Test Front Squat')
     const slot = makeSlot(
@@ -36,14 +37,18 @@ describe('ProgramSlotCard', () => {
 
     render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
 
-    await user.type(screen.getByLabelText(/weight/i), '225')
-    await user.type(screen.getByLabelText(/reps/i), '5')
-    await user.click(screen.getByRole('button', { name: /add set/i }))
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 1/i), '225')
+    await user.clear(screen.getByLabelText(/reps — set 1/i))
+    await user.type(screen.getByLabelText(/reps — set 1/i), '5')
+    // Four unlogged working rows all render a "Log set" button at this
+    // point (workingTargets has 4 entries), so this targets the first one —
+    // the row we just filled in — rather than assuming a single match.
+    await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
 
     expect(await screen.findByText(/pr!/i)).toBeInTheDocument()
   })
 
-  it('shows a warmup checkbox only when the week has warmup targets, and does not flag warmups as PRs', async () => {
+  it('renders a warmup row before the working rows when the week has warmup targets, and does not flag a warmup as a PR', async () => {
     const user = userEvent.setup()
     const exerciseId = await addExercise('Test Bench Press')
     const slot = makeSlot(
@@ -53,13 +58,84 @@ describe('ProgramSlotCard', () => {
 
     render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
 
-    const warmupCheckbox = screen.getByLabelText(/warmup/i)
-    await user.click(warmupCheckbox)
-    await user.type(screen.getByLabelText(/weight/i), '45')
-    await user.type(screen.getByLabelText(/reps/i), '5')
-    await user.click(screen.getByRole('button', { name: /add set/i }))
+    expect(screen.getByLabelText(/weight \(lbs\) — warmup 1/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/weight \(lbs\) — warmup 2/i)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/weight \(lbs\) — warmup 1/i), '45')
+    await user.clear(screen.getByLabelText(/reps — warmup 1/i))
+    await user.type(screen.getByLabelText(/reps — warmup 1/i), '5')
+    await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
 
     expect(screen.queryByText(/pr!/i)).not.toBeInTheDocument()
+  })
+
+  it('lets an already-logged row be edited independently via Update', async () => {
+    const user = userEvent.setup()
+    const exerciseId = await addExercise('Test Editable Row')
+    const priorSession = await getOrCreateSessionForDate('2026-07-06')
+    const priorEntry = await getOrCreateExerciseEntry(priorSession, exerciseId, 8, 1)
+    const setId = await addSet(priorEntry, 100, 3)
+
+    const slot = makeSlot(
+      { id: 8, exerciseId, measureType: 'weight' },
+      { id: 1, programExerciseId: 8, weekNumber: 1, rir: 'M', warmupTargets: [], workingTargets: [3], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
+
+    // The row is unlogged on first paint (the live query resolving with the
+    // prior set is async), so wait for the pre-filled value to actually
+    // arrive before capturing a stable input reference — grabbing it too
+    // early risks holding a reference to a node from before the row's key
+    // (based on the now-loaded set id) settles.
+    await waitFor(() => expect(screen.getByLabelText(/weight \(lbs\) — set 1/i)).toHaveValue(100))
+    const weightInput = screen.getByLabelText(/weight \(lbs\) — set 1/i)
+
+    await user.clear(weightInput)
+    await user.type(weightInput, '105')
+    await user.click(screen.getByRole('button', { name: /update/i }))
+
+    await waitFor(async () => {
+      const updated = await db.sets.get(setId)
+      expect(updated?.weightLbs).toBe(105)
+    })
+  })
+
+  it('adds an extra set row beyond the prescription via "+ Add extra set"', async () => {
+    const user = userEvent.setup()
+    const exerciseId = await addExercise('Test Extra Set')
+    const slot = makeSlot(
+      { exerciseId, measureType: 'weight' },
+      { id: 9, programExerciseId: 9, weekNumber: 1, rir: 'M', warmupTargets: [], workingTargets: [3], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
+
+    // A row's working-vs-extra classification is positional (the Nth
+    // chronologically-logged working set fills row N), so the prescribed
+    // row must be logged first — otherwise the "extra" set would itself
+    // become row 1 instead of landing beyond it.
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 1/i), '90')
+    await user.clear(screen.getByLabelText(/reps — set 1/i))
+    await user.type(screen.getByLabelText(/reps — set 1/i), '3')
+    await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
+    await waitFor(() => expect(screen.getByRole('button', { name: /update/i })).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /add extra set/i }))
+    expect(screen.getByLabelText(/weight \(lbs\) — set 2/i)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 2/i), '95')
+    await user.clear(screen.getByLabelText(/reps — set 2/i))
+    await user.type(screen.getByLabelText(/reps — set 2/i), '8')
+    await user.click(screen.getByRole('button', { name: /log set/i }))
+
+    // The typed value is already 95 before the save round-trip completes
+    // (it's just controlled input state), so that alone isn't a reliable
+    // signal the save finished. Wait for "+ Add extra set" to reappear —
+    // it's hidden while `showExtraRow` is true and only comes back via the
+    // row's `onSaved` callback once the set has actually been persisted.
+    await waitFor(() => expect(screen.getByRole('button', { name: /add extra set/i })).toBeInTheDocument())
+    expect(screen.getByLabelText(/weight \(lbs\) — set 2/i)).toHaveValue(95)
   })
 
   it('logs a bodyweight_reps set via the simple numeric form', async () => {
@@ -168,9 +244,10 @@ describe('ProgramSlotCard', () => {
 
     expect(await screen.findByText(/Last week: 205 lbs x 5/)).toBeInTheDocument()
 
-    await user.type(screen.getByLabelText(/weight/i), '215')
-    await user.type(screen.getByLabelText(/reps/i), '5')
-    await user.click(screen.getByRole('button', { name: /add set/i }))
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 1/i), '215')
+    await user.clear(screen.getByLabelText(/reps — set 1/i))
+    await user.type(screen.getByLabelText(/reps — set 1/i), '5')
+    await user.click(screen.getByRole('button', { name: /log set/i }))
 
     expect(await screen.findByText('Beat last week!')).toBeInTheDocument()
   })
@@ -189,9 +266,10 @@ describe('ProgramSlotCard', () => {
 
     render(<ProgramSlotCard slot={slot} date="2026-07-20" weekNumber={4} />)
 
-    await user.type(screen.getByLabelText(/weight/i), '205')
-    await user.type(screen.getByLabelText(/reps/i), '5')
-    await user.click(screen.getByRole('button', { name: /add set/i }))
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 1/i), '205')
+    await user.clear(screen.getByLabelText(/reps — set 1/i))
+    await user.type(screen.getByLabelText(/reps — set 1/i), '5')
+    await user.click(screen.getByRole('button', { name: /log set/i }))
 
     expect(await screen.findByText('Matched last week')).toBeInTheDocument()
   })
@@ -210,9 +288,10 @@ describe('ProgramSlotCard', () => {
 
     render(<ProgramSlotCard slot={slot} date="2026-07-20" weekNumber={4} />)
 
-    await user.type(screen.getByLabelText(/weight/i), '195')
-    await user.type(screen.getByLabelText(/reps/i), '5')
-    await user.click(screen.getByRole('button', { name: /add set/i }))
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 1/i), '195')
+    await user.clear(screen.getByLabelText(/reps — set 1/i))
+    await user.type(screen.getByLabelText(/reps — set 1/i), '5')
+    await user.click(screen.getByRole('button', { name: /log set/i }))
 
     expect(await screen.findByText('Fell short of last week')).toBeInTheDocument()
   })
@@ -305,20 +384,28 @@ describe('ProgramSlotCard', () => {
 
     expect(await screen.findByText(/Last week: 215 lbs x 5/)).toBeInTheDocument()
 
-    for (let i = 0; i < 3; i++) {
-      await user.type(screen.getByLabelText(/weight/i), '225')
-      await user.type(screen.getByLabelText(/reps/i), '3')
-      await user.click(screen.getByRole('button', { name: /add set/i }))
-      await waitFor(() => expect(screen.getByRole('button', { name: /add set/i })).not.toBeDisabled())
+    // Once a row's set is persisted its button flips from "Log set" to
+    // "Update" and drops out of this query, so the *first* remaining "Log
+    // set" button is always the next not-yet-logged row — as long as we
+    // wait for the previous row's save (and the live-query refresh it
+    // triggers) to actually land before moving on, rather than assuming a
+    // fixed index that would go stale as earlier rows convert.
+    for (let i = 1; i <= 3; i++) {
+      await user.type(screen.getByLabelText(new RegExp(`weight \\(lbs\\) — set ${i}$`, 'i')), '225')
+      await user.clear(screen.getByLabelText(new RegExp(`reps — set ${i}$`, 'i')))
+      await user.type(screen.getByLabelText(new RegExp(`reps — set ${i}$`, 'i')), '3')
+      await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
+      await waitFor(() => expect(screen.getAllByRole('button', { name: /log set/i })).toHaveLength(4 - i))
     }
 
     expect(screen.queryByText('Beat last week!')).not.toBeInTheDocument()
     expect(screen.queryByText('Fell short of last week')).not.toBeInTheDocument()
     expect(screen.queryByText('Matched last week')).not.toBeInTheDocument()
 
-    await user.type(screen.getByLabelText(/weight/i), '225')
-    await user.type(screen.getByLabelText(/reps/i), '5')
-    await user.click(screen.getByRole('button', { name: /add set/i }))
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 4/i), '225')
+    await user.clear(screen.getByLabelText(/reps — set 4/i))
+    await user.type(screen.getByLabelText(/reps — set 4/i), '5')
+    await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
 
     expect(await screen.findByText('Beat last week!')).toBeInTheDocument()
   })

@@ -53,9 +53,13 @@ describe('program day -> week label -> history', () => {
 
     render(<ProgramSlotCard slot={slot} date={PROGRAM_DATE} weekNumber={WEEK_NUMBER} />)
 
-    await user.type(screen.getByLabelText(/weight/i), '225')
-    await user.type(screen.getByLabelText(/reps/i), '5')
-    await user.click(screen.getByRole('button', { name: /add set/i }))
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 1/i), '225')
+    await user.clear(screen.getByLabelText(/reps — set 1/i))
+    await user.type(screen.getByLabelText(/reps — set 1/i), '5')
+    // The slot's prescription has 4 working targets, so all 4 unlogged rows
+    // render a "Log set" button at this point — target the first one, the
+    // row we just filled in.
+    await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
     expect(await screen.findByText(/pr!/i)).toBeInTheDocument()
 
     // The set landed on an entry tagged with both the program slot and week.
