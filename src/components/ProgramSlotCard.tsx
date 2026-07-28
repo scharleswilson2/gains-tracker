@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import type { ResolvedSlot } from '../db/programExercises'
 import { SlotHeader } from './SlotHeader'
 import { logWeightSet } from '../lib/logWeightSet'
-import { getLastWeekWeightResult, getWorkingSetCountForSlotWeek } from '../db/workouts'
+import { getLastWeekWeightResult, getSetsForExerciseOnDate, getWorkingSetCountForSlotWeek, updateSet } from '../db/workouts'
+import type { SetRecord } from '../db/schema'
 import {
   appendProgramLogValue,
   getLastWeekCategoryValue,
   getLastWeekSimpleValue,
   getProgramLogEntriesForDate,
   logCategoryChoice,
+  removeLastProgramLogValue,
 } from '../db/programLogEntries'
 import { compareSimpleValues, compareWeightSets } from '../lib/compareProgress'
 import type { ProgressBadge } from '../lib/compareProgress'
@@ -48,31 +50,40 @@ export function ProgramSlotCard({ slot, date, weekNumber }: ProgramSlotCardProps
   )
 }
 
-function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
-  const [weight, setWeight] = useState('')
-  const [reps, setReps] = useState('')
-  const [rpe, setRpe] = useState('')
-  const [isWarmup, setIsWarmup] = useState(false)
-  const [prMessage, setPrMessage] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const hasWarmupTargets = (slot.prescription?.warmupTargets.length ?? 0) > 0
+interface SetRow {
+  key: string
+  isWarmup: boolean
+  targetReps: number
+  set: SetRecord | null
+  // Whether this row is the next one that logging a new set will actually
+  // land on — a row's set is attributed by insertion order (see
+  // getSetsForExerciseOnDate), not by which row's button was clicked, so
+  // any not-yet-logged row other than the next one must not offer to log:
+  // doing so would silently fill an earlier row instead. Already-logged
+  // rows are always independently editable regardless of this flag.
+  canLog: boolean
+}
 
+function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
+  const [extraSlotCount, setExtraSlotCount] = useState(0)
   const exerciseId = slot.programExercise.exerciseId
   const programExerciseId = slot.programExercise.id!
-  const targetReps =
-    slot.prescription && slot.prescription.workingTargets.length > 0
-      ? slot.prescription.workingTargets[slot.prescription.workingTargets.length - 1]
-      : null
-  const targetSetCount = slot.prescription?.workingTargets.length ?? 0
+  const warmupTargets = slot.prescription?.warmupTargets ?? []
+  const workingTargets = slot.prescription?.workingTargets ?? []
+  const targetReps = workingTargets.length > 0 ? workingTargets[workingTargets.length - 1] : null
+  const targetSetCount = workingTargets.length
+
+  const loggedSets = useLiveQuery(
+    () => getSetsForExerciseOnDate(exerciseId, date, programExerciseId),
+    [exerciseId, date, programExerciseId]
+  ) ?? { warmup: [], working: [] }
+
   const thisWeekSetCount = useLiveQuery(
     () => getWorkingSetCountForSlotWeek(exerciseId, programExerciseId, weekNumber),
     [exerciseId, programExerciseId, weekNumber]
   ) ?? 0
   const hasCompletedPrescribedSets = targetSetCount > 0 && thisWeekSetCount >= targetSetCount
 
-  // Called with the current weekNumber here, and weekNumber - 1 below —
-  // "last week" describes the function's primary use, not a hardcoded
-  // offset, so it doubles as "this week's" result too.
   const thisWeekResult = useLiveQuery(
     () => getLastWeekWeightResult(exerciseId, programExerciseId, weekNumber),
     [exerciseId, programExerciseId, weekNumber]
@@ -86,39 +97,48 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
       ? compareWeightSets(thisWeekResult, lastWeekResult, targetReps)
       : null
 
-  async function handleAddSet() {
-    if (isSubmitting) return
-    const weightLbs = Number(weight)
-    const repsNum = Number(reps)
-    const rpeNum = rpe ? Number(rpe) : undefined
-    if (!(weightLbs > 0) || !Number.isInteger(repsNum) || repsNum <= 0) return
+  const warmupRows: SetRow[] = warmupTargets.map((target, i) => ({
+    key: `warmup-${i}`,
+    isWarmup: true,
+    targetReps: target,
+    set: loggedSets.warmup[i] ?? null,
+    canLog: i === loggedSets.warmup.length,
+  }))
+  const workingRows: SetRow[] = workingTargets.map((target, i) => ({
+    key: `working-${i}`,
+    isWarmup: false,
+    targetReps: target,
+    set: loggedSets.working[i] ?? null,
+    canLog: i === loggedSets.working.length,
+  }))
+  const loggedExtras = loggedSets.working.slice(workingTargets.length)
+  const extraRows: SetRow[] = loggedExtras.map((set, i) => ({
+    key: `extra-${i}`,
+    isWarmup: false,
+    targetReps: set.reps,
+    set,
+    canLog: true, // already logged — Update is always available regardless of canLog
+  }))
+  // `extraSlotCount` only ever grows (clicking "+ Add extra set" bumps it,
+  // nothing decrements it), so how many *pending* (not-yet-logged) extra
+  // rows to render is purely derived from how far ahead of the logged data
+  // it currently is — the pending row disappears exactly when the live
+  // query catches up and the real row lands in `extraRows`, with no
+  // imperative "hide it now" step that could race ahead of that data.
+  const pendingCount = Math.max(0, extraSlotCount - extraRows.length)
+  const pendingRows: SetRow[] = Array.from({ length: pendingCount }, (_, i) => ({
+    key: `extra-${extraRows.length + i}`,
+    isWarmup: false,
+    targetReps: workingTargets[workingTargets.length - 1] ?? 0,
+    set: null,
+    // Only the first pending row is ever the immediate next working-stream
+    // slot — the "+ Add extra set" gate (below) keeps more than one pending
+    // row from existing at once in practice, but this stays correct even if
+    // that ever changes.
+    canLog: workingTargets.length + extraRows.length + i === loggedSets.working.length,
+  }))
 
-    setIsSubmitting(true)
-    try {
-      const pr = await logWeightSet({
-        exerciseId: slot.programExercise.exerciseId,
-        date,
-        weightLbs,
-        reps: repsNum,
-        rpe: rpeNum,
-        isWarmup,
-        programExerciseId: slot.programExercise.id,
-        weekNumber,
-      })
-      setWeight('')
-      setReps('')
-      setRpe('')
-      setIsWarmup(false)
-      setPrMessage(!isWarmup && (pr.isWeightPr || pr.isEstimated1RmPr) ? 'PR!' : null)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  const weightId = `weight-${slot.programExercise.id}`
-  const repsId = `reps-${slot.programExercise.id}`
-  const rpeId = `rpe-${slot.programExercise.id}`
-  const warmupId = `warmup-${slot.programExercise.id}`
+  const rows = [...warmupRows, ...workingRows, ...extraRows, ...pendingRows]
 
   return (
     <div>
@@ -127,38 +147,120 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
           Last week: {lastWeekResult.weightLbs} lbs x {lastWeekResult.reps}
         </p>
       )}
-      <label htmlFor={weightId}>Weight (lbs)</label>
-      <input id={weightId} type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
-      <label htmlFor={repsId}>Reps</label>
-      <input id={repsId} type="number" value={reps} onChange={(e) => setReps(e.target.value)} />
-      <label htmlFor={rpeId}>RPE (optional)</label>
-      <input id={rpeId} type="number" value={rpe} onChange={(e) => setRpe(e.target.value)} />
-      {hasWarmupTargets && (
-        <>
-          <label htmlFor={warmupId}>Warmup set</label>
-          <input
-            id={warmupId}
-            type="checkbox"
-            checked={isWarmup}
-            onChange={(e) => setIsWarmup(e.target.checked)}
+      {rows.map((row, i) => {
+        const rowLabel = row.isWarmup ? `Warmup ${i + 1}` : `Set ${i + 1 - warmupRows.length}`
+        return (
+          <WeightRow
+            key={row.key}
+            row={row}
+            rowLabel={rowLabel}
+            slot={slot}
+            date={date}
+            weekNumber={weekNumber}
           />
-        </>
+        )
+      })}
+      {/* A row's set is attributed by insertion order (getSetsForExerciseOnDate's
+          contract), not by which row's button the user clicked — so an extra set
+          logged before the prescribed rows are done would land on an earlier,
+          untouched row instead of at the end. Gating this on the prescription
+          being complete keeps every new save unambiguously "the next row." */}
+      {pendingCount === 0 && loggedSets.working.length >= workingTargets.length && (
+        <button type="button" onClick={() => setExtraSlotCount((c) => c + 1)}>
+          + Add extra set
+        </button>
       )}
-      <button type="button" onClick={handleAddSet} disabled={isSubmitting}>
-        Add Set
-      </button>
-      {prMessage && <p role="status">{prMessage}</p>}
       {progressBadge && <p role="status">{BADGE_LABEL[progressBadge]}</p>}
     </div>
   )
 }
 
-function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
-  const [value, setValue] = useState('')
-  const programExerciseId = slot.programExercise.id!
+function WeightRow({
+  row,
+  rowLabel,
+  slot,
+  date,
+  weekNumber,
+}: {
+  row: SetRow
+  rowLabel: string
+  slot: ResolvedSlot
+  date: string
+  weekNumber: number
+}) {
+  const [weight, setWeight] = useState(row.set ? String(row.set.weightLbs) : '')
+  const [reps, setReps] = useState(row.set ? String(row.set.reps) : String(row.targetReps))
+  const [prMessage, setPrMessage] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const weightId = `weight-${slot.programExercise.id}-${row.key}`
+  const repsId = `reps-${slot.programExercise.id}-${row.key}`
 
-  // Read only — the write path never derives its next state from this
-  // snapshot, so a stale live-query result cannot cause a lost value.
+  // The row's key is stable (it never changes based on row.set), so this
+  // component instance survives the transition from "not yet logged" to
+  // "logged" — including when `row.set` first arrives asynchronously from
+  // the live query on initial mount (a pre-existing set loaded from a prior
+  // session). Sync the displayed values from row.set whenever its identity
+  // changes, without touching prMessage — a remount-on-set-arrival approach
+  // would instead wipe the just-set "PR!" message the instant handleSave's
+  // own live-query refresh lands, before it ever painted.
+  useEffect(() => {
+    if (row.set) {
+      setWeight(String(row.set.weightLbs))
+      setReps(String(row.set.reps))
+    }
+  }, [row.set?.id])
+
+  async function handleSave() {
+    if (isSubmitting || (!row.set && !row.canLog)) return
+    const weightLbs = Number(weight)
+    const repsNum = Number(reps)
+    if (!(weightLbs > 0) || !Number.isInteger(repsNum) || repsNum <= 0) return
+
+    setIsSubmitting(true)
+    try {
+      if (row.set) {
+        await updateSet(row.set.id!, { weightLbs, reps: repsNum })
+        setPrMessage(null)
+      } else {
+        const pr = await logWeightSet({
+          exerciseId: slot.programExercise.exerciseId,
+          date,
+          weightLbs,
+          reps: repsNum,
+          isWarmup: row.isWarmup,
+          programExerciseId: slot.programExercise.id,
+          weekNumber,
+        })
+        setPrMessage(!row.isWarmup && (pr.isWeightPr || pr.isEstimated1RmPr) ? 'PR!' : null)
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div>
+      <span>
+        {rowLabel} (target {row.targetReps})
+      </span>
+      <label htmlFor={weightId}>Weight (lbs) — {rowLabel}</label>
+      <input id={weightId} type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
+      <label htmlFor={repsId}>Reps — {rowLabel}</label>
+      <input id={repsId} type="number" value={reps} onChange={(e) => setReps(e.target.value)} />
+      <button type="button" onClick={handleSave} disabled={isSubmitting || (!row.set && !row.canLog)}>
+        {row.set ? 'Update' : 'Log set'}
+      </button>
+      {prMessage && <p role="status">{prMessage}</p>}
+    </div>
+  )
+}
+
+function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
+  const [extraRowRequestCount, setExtraRowRequestCount] = useState(0)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const programExerciseId = slot.programExercise.id!
+  const workingTargets = slot.prescription?.workingTargets ?? []
+
   const entries = useLiveQuery(
     () => getProgramLogEntriesForDate(programExerciseId, date),
     [programExerciseId, date]
@@ -173,29 +275,96 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const progressBadge =
     thisWeekLastValue !== undefined ? compareSimpleValues(thisWeekLastValue, lastWeekValue) : null
 
-  async function handleAdd() {
-    const numValue = Number(value)
-    if (!Number.isFinite(numValue) || numValue <= 0) return
-    setValue('')
-    await appendProgramLogValue(programExerciseId, date, weekNumber, numValue)
+  const lastTarget = workingTargets[workingTargets.length - 1] ?? 0
+  const loggedExtraCount = Math.max(0, loggedValues.length - workingTargets.length)
+  // `extraRowRequestCount` only ever grows (clicking "+ Add extra set" bumps
+  // it, nothing decrements it), so how many extra rows to render is purely
+  // derived from how far ahead of the logged data it currently is — mirrors
+  // WeightSlotForm's `extraSlotCount`/`pendingCount` pattern. An earlier
+  // version reset a `showExtraRow` boolean back to false imperatively right
+  // after the append promise resolved; that reset landed in a render before
+  // the live query's own async refresh had caught up, so the extra row's
+  // count dropped to zero and back up again, unmounting and remounting the
+  // checkbox with a fresh DOM node mid-interaction. Deriving purely from
+  // `loggedValues` (via `Math.max`) means the row's presence and its
+  // checked state always move together on the same render, so there is no
+  // such gap.
+  const extraRowCount = Math.max(extraRowRequestCount, loggedExtraCount)
+  const pendingExtraCount = Math.max(0, extraRowRequestCount - loggedExtraCount)
+
+  // `isSubmitting` guards against a rapid double-fire on the same checkbox
+  // (two change events landing before the first write's live-query refresh
+  // updates `loggedValues`) — without it, both events see the same stale
+  // `loggedValues.length` and pass the index guard, silently double-logging
+  // a set and checking the row after it. Mirrors WeightRow's identical
+  // `isSubmitting` guard on its save button in this same file.
+  async function handleCheck(rowIndex: number, targetValue: number) {
+    if (isSubmitting || rowIndex !== loggedValues.length) return
+    setIsSubmitting(true)
+    try {
+      await appendProgramLogValue(programExerciseId, date, weekNumber, targetValue)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const valueId = `value-${programExerciseId}`
+  async function handleUncheck(rowIndex: number) {
+    if (isSubmitting || rowIndex !== loggedValues.length - 1) return
+    setIsSubmitting(true)
+    try {
+      await removeLastProgramLogValue(programExerciseId, date, weekNumber)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const rows = [
+    ...workingTargets.map((target, i) => ({ index: i, target })),
+    ...Array.from({ length: extraRowCount }, (_, i) => ({
+      index: workingTargets.length + i,
+      target: lastTarget,
+    })),
+  ]
 
   return (
     <div>
       {lastWeekValue !== undefined && <p>Last week: {lastWeekValue}</p>}
-      <label htmlFor={valueId}>Value</label>
-      <input id={valueId} type="number" value={value} onChange={(e) => setValue(e.target.value)} />
-      <button type="button" onClick={handleAdd}>
-        Add Set
-      </button>
+      {rows.map((row) => {
+        const checked = row.index < loggedValues.length
+        // Only the next open row can be checked, and only the most-recently-
+        // checked row can be unchecked — any other checked row is clickable
+        // in the DOM by default (its own handler just no-ops), which reads
+        // as an affordance it won't honor. Disable it explicitly instead.
+        const disabled =
+          isSubmitting ||
+          (checked ? row.index !== loggedValues.length - 1 : row.index !== loggedValues.length)
+        const checkboxId = `set-${programExerciseId}-${row.index}`
+        return (
+          <div key={row.index}>
+            <label htmlFor={checkboxId}>
+              Set {row.index + 1} (target {row.target})
+            </label>
+            <input
+              id={checkboxId}
+              type="checkbox"
+              checked={checked}
+              disabled={disabled}
+              onChange={(e) =>
+                e.target.checked ? handleCheck(row.index, row.target) : handleUncheck(row.index)
+              }
+            />
+          </div>
+        )
+      })}
+      {/* No working targets at all (e.g. no prescription for this week) means
+          there's no target value to log an extra row with — lastTarget would
+          fall back to 0, which the checkbox would then log verbatim. */}
+      {pendingExtraCount === 0 && lastTarget > 0 && (
+        <button type="button" onClick={() => setExtraRowRequestCount((c) => c + 1)}>
+          + Add extra set
+        </button>
+      )}
       {progressBadge && <p role="status">{BADGE_LABEL[progressBadge]}</p>}
-      <ul>
-        {loggedValues.map((v, i) => (
-          <li key={i}>{v}</li>
-        ))}
-      </ul>
     </div>
   )
 }

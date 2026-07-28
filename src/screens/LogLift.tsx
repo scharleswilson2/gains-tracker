@@ -2,28 +2,40 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { addExercise, listExercises } from '../db/exercises'
 import { getExerciseHistory, getLastSessionSets } from '../db/workouts'
-import { getActiveProgramDay } from '../db/programs'
+import { findDefaultDayIndex, listAllProgramDaysChronological } from '../db/programs'
 import { getDaySlots, groupSlotsByBlock } from '../db/programExercises'
 import { ProgramSlotCard } from '../components/ProgramSlotCard'
+import { SlotHeader } from '../components/SlotHeader'
+import { DayNavigator } from '../components/DayNavigator'
 import { logWeightSet } from '../lib/logWeightSet'
 import { todayIso } from '../lib/dates'
 
 export function LogLift() {
   const today = todayIso()
+  const [dayIndex, setDayIndex] = useState<number | null>(null)
   const [query, setQuery] = useState('')
   const [selectedExerciseId, setSelectedExerciseId] = useState<number | null>(null)
   const [selectedExerciseName, setSelectedExerciseName] = useState('')
+  const [isBodyweight, setIsBodyweight] = useState(false)
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
-  const [rpe, setRpe] = useState('')
   const [prMessage, setPrMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const activeDay = useLiveQuery(() => getActiveProgramDay(today), [today])
+  const allDaysQuery = useLiveQuery(() => listAllProgramDaysChronological(), [])
+  const allDays = allDaysQuery ?? []
+  const currentIndex = dayIndex ?? findDefaultDayIndex(allDays, today)
+  const activeEntry = currentIndex >= 0 ? allDays[currentIndex] ?? null : null
+
   const slots = useLiveQuery(
-    () => (activeDay ? getDaySlots(activeDay.day.id!, activeDay.week.weekNumber) : Promise.resolve([])),
-    [activeDay]
+    () =>
+      activeEntry ? getDaySlots(activeEntry.day.id!, activeEntry.week.weekNumber) : Promise.resolve([]),
+    [activeEntry]
   ) ?? []
+
+  const isLiveWeek = activeEntry
+    ? today >= activeEntry.week.startDate && today <= activeEntry.week.endDate
+    : false
 
   const allExercises = useLiveQuery(() => listExercises(), []) ?? []
   const matches =
@@ -48,17 +60,15 @@ export function LogLift() {
     setSelectedExerciseName(name)
     setQuery('')
     setPrMessage(null)
+    setIsBodyweight(false)
   }
 
   async function handleAddSet() {
     if (!selectedExerciseId || isSubmitting) return
-    const weightLbs = Number(weight)
     const repsNum = Number(reps)
-    const rpeNum = rpe ? Number(rpe) : undefined
-
-    if (!(weightLbs > 0) || !Number.isInteger(repsNum) || repsNum <= 0) {
-      return
-    }
+    if (!Number.isInteger(repsNum) || repsNum <= 0) return
+    const weightLbs = isBodyweight ? 0 : Number(weight)
+    if (!isBodyweight && !(weightLbs > 0)) return
 
     setIsSubmitting(true)
     try {
@@ -67,45 +77,53 @@ export function LogLift() {
         date: today,
         weightLbs,
         reps: repsNum,
-        rpe: rpeNum,
       })
 
       setWeight('')
       setReps('')
-      setRpe('')
       setPrMessage(pr.isWeightPr || pr.isEstimated1RmPr ? 'PR!' : null)
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // `activeDay === undefined` means the live query hasn't resolved yet;
-  // `null` means resolved with "no program today" — both are valid states
-  // to render the free-form-only screen below, so there's no loading gate
-  // needed here (unlike Progress's exercise picker, nothing downstream of
-  // `activeDay` requires synchronous option-list presence for tests).
+  // `allDaysQuery === undefined` means the live query hasn't resolved yet.
+  // Waiting for it (rather than rendering with an empty `allDays` fallback)
+  // matches Program.tsx's old loading gate and keeps DayNavigator from
+  // briefly flashing "no days" before the real list arrives.
+  if (allDaysQuery === undefined) {
+    return (
+      <div>
+        <h1>Log</h1>
+        <p>Loading...</p>
+      </div>
+    )
+  }
 
   return (
     <div>
-      <h1>Log Lift</h1>
+      <h1>Log</h1>
 
-      {activeDay && (
+      <DayNavigator days={allDays} currentIndex={currentIndex} onNavigate={setDayIndex} />
+
+      {activeEntry && (
         <section>
-          <h2>
-            Day {activeDay.day.dayNumber} — Week {activeDay.week.weekNumber}
-          </h2>
-          {activeDay.day.note && <p>{activeDay.day.note}</p>}
+          {activeEntry.day.note && <p>{activeEntry.day.note}</p>}
           {groupSlotsByBlock(slots).map(([blockLabel, blockSlots]) => (
             <div key={blockLabel}>
               <h3>{blockLabel}</h3>
-              {blockSlots.map((slot) => (
-                <ProgramSlotCard
-                  key={slot.programExercise.id}
-                  slot={slot}
-                  date={today}
-                  weekNumber={activeDay.week.weekNumber}
-                />
-              ))}
+              {blockSlots.map((slot) =>
+                isLiveWeek ? (
+                  <ProgramSlotCard
+                    key={slot.programExercise.id}
+                    slot={slot}
+                    date={activeEntry.date}
+                    weekNumber={activeEntry.week.weekNumber}
+                  />
+                ) : (
+                  <SlotHeader key={slot.programExercise.id} slot={slot} />
+                )
+              )}
             </div>
           ))}
         </section>
@@ -147,32 +165,31 @@ export function LogLift() {
           <h2>{selectedExerciseName}</h2>
 
           {lastSets && lastSets.length > 0 && (
-            <p>
-              Last time: {lastSets.map((s) => `${s.weightLbs} x ${s.reps}`).join(', ')}
-            </p>
+            <p>Last time: {lastSets.map((s) => `${s.weightLbs} x ${s.reps}`).join(', ')}</p>
           )}
 
-          <div>
-            <label htmlFor="weight-input">Weight (lbs)</label>
-            <input
-              id="weight-input"
-              type="number"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-            />
-          </div>
+          <label htmlFor="bodyweight-toggle">No weight (bodyweight)</label>
+          <input
+            id="bodyweight-toggle"
+            type="checkbox"
+            checked={isBodyweight}
+            onChange={(e) => setIsBodyweight(e.target.checked)}
+          />
+
+          {!isBodyweight && (
+            <div>
+              <label htmlFor="weight-input">Weight (lbs)</label>
+              <input
+                id="weight-input"
+                type="number"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+              />
+            </div>
+          )}
           <div>
             <label htmlFor="reps-input">Reps</label>
-            <input
-              id="reps-input"
-              type="number"
-              value={reps}
-              onChange={(e) => setReps(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="rpe-input">RPE (optional)</label>
-            <input id="rpe-input" type="number" value={rpe} onChange={(e) => setRpe(e.target.value)} />
+            <input id="reps-input" type="number" value={reps} onChange={(e) => setReps(e.target.value)} />
           </div>
           <button type="button" onClick={handleAddSet} disabled={isSubmitting}>
             Add Set
@@ -185,7 +202,6 @@ export function LogLift() {
             {(todaySets ?? []).map((s, i) => (
               <li key={i}>
                 {s.weightLbs} x {s.reps}
-                {s.rpe ? ` @RPE ${s.rpe}` : ''}
               </li>
             ))}
           </ul>

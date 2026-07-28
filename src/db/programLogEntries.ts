@@ -188,3 +188,38 @@ export async function getLastWeekCategoryValue(
 ): Promise<number | undefined> {
   return lastValueForMatchingEntry(programExerciseId, weekNumber, (c) => c === category)
 }
+
+/**
+ * The inverse of `appendProgramLogValue`: pops the last value (and its
+ * `isWarmup` flag) off the date's no-category entry, deleting the entry
+ * row entirely if that empties it. Used to "uncheck" the most recently
+ * checked row in the fixed-row bodyweight/time/distance set UI — checking
+ * only ever advances to the next open row, so unchecking only ever
+ * retracts the most recent one.
+ */
+export async function removeLastProgramLogValue(
+  programExerciseId: number,
+  date: string,
+  weekNumber: number
+): Promise<void> {
+  return db.transaction('rw', db.programLogEntries, async () => {
+    const existing = await db.programLogEntries
+      .where('programExerciseId')
+      .equals(programExerciseId)
+      .and((e) => e.date === date && (e.chosenCategory ?? null) === null)
+      .first()
+    if (!existing || existing.values.length === 0) return
+
+    const nextValues = existing.values.slice(0, -1)
+    const nextIsWarmup = existing.isWarmup.slice(0, -1)
+    if (nextValues.length === 0) {
+      await db.programLogEntries.delete(existing.id!)
+      return
+    }
+    await db.programLogEntries.update(existing.id!, {
+      weekNumber,
+      values: nextValues,
+      isWarmup: nextIsWarmup,
+    })
+  })
+}

@@ -9,8 +9,10 @@ import {
   getLastWeekWeightResult,
   getOrCreateExerciseEntry,
   getOrCreateSessionForDate,
+  getSetsForExerciseOnDate,
   getWorkingSetCountForSlotWeek,
   getWorkingSetHistory,
+  updateSet,
   workingSetsOnly,
 } from './workouts'
 
@@ -64,12 +66,12 @@ describe('workouts data layer', () => {
 
     const session2 = await getOrCreateSessionForDate('2026-07-22')
     const entry2 = await getOrCreateExerciseEntry(session2, exerciseId)
-    await addSet(entry2, 195, 5, 8)
+    await addSet(entry2, 195, 5)
 
     const history = await getExerciseHistory(exerciseId)
     expect(history.map((h) => h.date)).toEqual(['2026-07-15', '2026-07-22'])
     expect(history[1].sets).toEqual([
-      expect.objectContaining({ weightLbs: 195, reps: 5, rpe: 8 }),
+      expect.objectContaining({ weightLbs: 195, reps: 5 }),
     ])
   })
 
@@ -136,7 +138,7 @@ describe('workouts data layer', () => {
     const exerciseId = await addExercise('Test Isolation Exercise 2')
     const sessionId = await getOrCreateSessionForDate('2026-07-01')
     const entryId = await getOrCreateExerciseEntry(sessionId, exerciseId)
-    const setId = await addSet(entryId, 45, 5, undefined, true)
+    const setId = await addSet(entryId, 45, 5, true)
     const set = await db.sets.get(setId)
     expect(set?.isWarmup).toBe(true)
   })
@@ -178,12 +180,12 @@ describe('getWorkingSetHistory', () => {
     const exerciseId = await addExercise('Test Warmup Exercise')
     const session1 = await getOrCreateSessionForDate('2026-07-01')
     const entry1 = await getOrCreateExerciseEntry(session1, exerciseId)
-    await addSet(entry1, 45, 5, undefined, true) // warmup only this session
+    await addSet(entry1, 45, 5, true) // warmup only this session
 
     const session2 = await getOrCreateSessionForDate('2026-07-08')
     const entry2 = await getOrCreateExerciseEntry(session2, exerciseId)
-    await addSet(entry2, 45, 5, undefined, true) // warmup
-    await addSet(entry2, 225, 5, undefined, false) // working set
+    await addSet(entry2, 45, 5, true) // warmup
+    await addSet(entry2, 225, 5, false) // working set
 
     const history = await getWorkingSetHistory(exerciseId)
     expect(history).toHaveLength(1) // 2026-07-01 dropped entirely (all warmup)
@@ -231,7 +233,7 @@ describe('getLastWeekWeightResult', () => {
     const session = await getOrCreateSessionForDate('2026-07-13')
     const entry = await getOrCreateExerciseEntry(session, exerciseId, 11, 3)
     await addSet(entry, 205, 5)
-    await addSet(entry, 45, 8, undefined, true) // warmup, logged last
+    await addSet(entry, 45, 8, true) // warmup, logged last
 
     const result = await getLastWeekWeightResult(exerciseId, 11, 3)
     expect(result?.weightLbs).toBe(205)
@@ -285,7 +287,7 @@ describe('getWorkingSetCountForSlotWeek', () => {
     const exerciseId = await addExercise('Test Set Count')
     const session = await getOrCreateSessionForDate('2026-07-13')
     const entry = await getOrCreateExerciseEntry(session, exerciseId, 70, 3)
-    await addSet(entry, 45, 5, undefined, true) // warmup, not counted
+    await addSet(entry, 45, 5, true) // warmup, not counted
     await addSet(entry, 205, 5)
     await addSet(entry, 205, 4)
 
@@ -297,5 +299,125 @@ describe('getWorkingSetCountForSlotWeek', () => {
     const exerciseId = await addExercise('Test Zero Set Count')
     const count = await getWorkingSetCountForSlotWeek(exerciseId, 999, 1)
     expect(count).toBe(0)
+  })
+})
+
+describe('getSetsForExerciseOnDate', () => {
+  it('splits a date\'s sets into warmup and working, in insertion order', async () => {
+    const exerciseId = await addExercise('Test Row Split')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId)
+    await addSet(entry, 45, 5, true)
+    await addSet(entry, 135, 5)
+    await addSet(entry, 145, 3)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27')
+    expect(result.warmup).toHaveLength(1)
+    expect(result.warmup[0].weightLbs).toBe(45)
+    expect(result.working.map((s) => s.weightLbs)).toEqual([135, 145])
+  })
+
+  it('returns empty lists when nothing was logged that date', async () => {
+    const exerciseId = await addExercise('Test No Sets That Date')
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27')
+    expect(result).toEqual({ warmup: [], working: [] })
+  })
+
+  it('only returns sets from the requested date, not other dates', async () => {
+    const exerciseId = await addExercise('Test Date Scoped Sets')
+    const session1 = await getOrCreateSessionForDate('2026-07-20')
+    const entry1 = await getOrCreateExerciseEntry(session1, exerciseId)
+    await addSet(entry1, 100, 5)
+    const session2 = await getOrCreateSessionForDate('2026-07-27')
+    const entry2 = await getOrCreateExerciseEntry(session2, exerciseId)
+    await addSet(entry2, 105, 5)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27')
+    expect(result.working.map((s) => s.weightLbs)).toEqual([105])
+  })
+
+  it('with no programExerciseId argument, returns sets regardless of which slot (if any) tagged the entry', async () => {
+    const exerciseId = await addExercise('Test Untagged Scope')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 999, 1)
+    await addSet(entry, 135, 5)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27')
+    expect(result.working.map((s) => s.weightLbs)).toEqual([135])
+  })
+
+  it('with a matching programExerciseId, returns the entry\'s sets', async () => {
+    const exerciseId = await addExercise('Test Matching Slot Scope')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 42, 1)
+    await addSet(entry, 135, 5)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27', 42)
+    expect(result.working.map((s) => s.weightLbs)).toEqual([135])
+  })
+
+  it('with a non-matching programExerciseId, returns empty rather than a different slot\'s sets', async () => {
+    const exerciseId = await addExercise('Test Cross Slot Contamination')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 7, 1)
+    await addSet(entry, 135, 5)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27', 42)
+    expect(result).toEqual({ warmup: [], working: [] })
+  })
+
+  it('with a slot-scoped read against a still-untagged entry, returns empty rather than a free-form set logged first', async () => {
+    const exerciseId = await addExercise('Test Free Form First Protected')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    // A free-form log with no slot tag — getOrCreateExerciseEntry leaves
+    // programExerciseId undefined until some slot's own log backfills it.
+    const entry = await getOrCreateExerciseEntry(session, exerciseId)
+    await addSet(entry, 95, 8)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27', 42)
+    expect(result).toEqual({ warmup: [], working: [] })
+  })
+
+  it('KNOWN LIMITATION: a free-form log after the slot has already tagged the entry still shows up in that slot\'s rows', async () => {
+    const exerciseId = await addExercise('Test Prescribed First Then Free Form')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+
+    // The prescribed slot logs first — the common real-world ordering,
+    // since prescribed rows render above the free-form section on screen.
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 42, 1)
+    await addSet(entry, 135, 5) // the slot's own Set 1
+
+    // A later free-form log of the same exercise goes through the exact
+    // same lookup a real free-form log would use (no tag args) — proving
+    // it resolves to the *same* entry, not asserting that as a given, so
+    // this test would fail loudly (rather than silently going stale) if
+    // getOrCreateExerciseEntry ever stopped reusing an already-tagged
+    // entry for an untagged caller.
+    const freeFormEntryId = await getOrCreateExerciseEntry(session, exerciseId)
+    expect(freeFormEntryId).toBe(entry)
+    await addSet(freeFormEntryId, 95, 8) // the free-form set
+
+    // Scoping by programExerciseId is entry-level, not set-level, so it
+    // can't tell these two sets apart: the free-form set silently
+    // appears as slot 42's "Set 2". This is the documented residual gap
+    // in getSetsForExerciseOnDate — this test exists to keep it visible,
+    // not to assert it's acceptable.
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27', 42)
+    expect(result.working.map((s) => s.weightLbs)).toEqual([135, 95])
+  })
+})
+
+describe('updateSet', () => {
+  it('updates weightLbs and reps on an existing set in place', async () => {
+    const exerciseId = await addExercise('Test Update Set')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId)
+    const setId = await addSet(entry, 135, 5)
+
+    await updateSet(setId, { weightLbs: 140, reps: 4 })
+
+    const updated = await db.sets.get(setId)
+    expect(updated?.weightLbs).toBe(140)
+    expect(updated?.reps).toBe(4)
   })
 })

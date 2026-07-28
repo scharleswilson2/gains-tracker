@@ -3,8 +3,10 @@ import {
   addProgramDay,
   addProgramWeek,
   createProgram,
+  findDefaultDayIndex,
   getActiveProgramDay,
   getCurrentProgramWeek,
+  listAllProgramDaysChronological,
   listProgramDays,
   listPrograms,
   listProgramWeeks,
@@ -114,5 +116,65 @@ describe('getCurrentProgramWeek', () => {
   it('returns null when there are no programs at all', async () => {
     const current = await getCurrentProgramWeek('2026-07-01')
     expect(current).toBeNull()
+  })
+})
+
+describe('listAllProgramDaysChronological', () => {
+  it('lists every day across every program, sorted ascending by calendar date', async () => {
+    const julyId = await createProgram('July', '2026-06-29', '2026-07-24')
+    await addProgramWeek(julyId, 1, '2026-06-29', '2026-07-03')
+    await addProgramDay(julyId, 1)
+    await addProgramDay(julyId, 5)
+
+    const augustId = await createProgram('August', '2026-07-27', '2026-08-21')
+    await addProgramWeek(augustId, 1, '2026-07-27', '2026-07-31')
+    await addProgramDay(augustId, 1)
+
+    const days = await listAllProgramDaysChronological()
+    expect(days.map((d) => d.date)).toEqual(['2026-06-29', '2026-07-03', '2026-07-27'])
+    expect(days.map((d) => d.program.name)).toEqual(['July', 'July', 'August'])
+    expect(days[2].day.dayNumber).toBe(1)
+    expect(days[2].week.weekNumber).toBe(1)
+  })
+
+  it('resolves the same day template to a different date in each week of a multi-week program', async () => {
+    const programId = await createProgram('Two Week Program', '2026-06-29', '2026-07-10')
+    await addProgramWeek(programId, 1, '2026-06-29', '2026-07-03')
+    await addProgramWeek(programId, 2, '2026-07-06', '2026-07-10')
+    await addProgramDay(programId, 1) // Monday template
+
+    const days = await listAllProgramDaysChronological()
+    expect(days.map((d) => d.date)).toEqual(['2026-06-29', '2026-07-06'])
+    expect(days[0].week.weekNumber).toBe(1)
+    expect(days[1].week.weekNumber).toBe(2)
+  })
+
+  it('returns an empty list when there are no programs', async () => {
+    const days = await listAllProgramDaysChronological()
+    expect(days).toEqual([])
+  })
+})
+
+describe('findDefaultDayIndex', () => {
+  const days = [
+    { date: '2026-06-29' },
+    { date: '2026-07-03' },
+    { date: '2026-07-27' },
+  ] as Awaited<ReturnType<typeof listAllProgramDaysChronological>>
+
+  it('returns the index of the day matching today exactly', () => {
+    expect(findDefaultDayIndex(days, '2026-07-03')).toBe(1)
+  })
+
+  it('falls back to the next day after today when today has no exact match', () => {
+    expect(findDefaultDayIndex(days, '2026-07-01')).toBe(1)
+  })
+
+  it('falls back to the last day when today is after every listed day', () => {
+    expect(findDefaultDayIndex(days, '2099-01-01')).toBe(2)
+  })
+
+  it('returns -1 when the list is empty', () => {
+    expect(findDefaultDayIndex([], '2026-07-01')).toBe(-1)
   })
 })

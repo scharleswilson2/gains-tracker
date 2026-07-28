@@ -35,10 +35,9 @@ export async function addSet(
   exerciseEntryId: number,
   weightLbs: number,
   reps: number,
-  rpe?: number,
   isWarmup = false
 ): Promise<number> {
-  return db.sets.add({ exerciseEntryId, weightLbs, reps, rpe, isWarmup })
+  return db.sets.add({ exerciseEntryId, weightLbs, reps, isWarmup })
 }
 
 export function workingSetsOnly(sets: SetRecord[]): SetRecord[] {
@@ -142,4 +141,71 @@ export async function getWorkingSetCountForSlotWeek(
     count += workingSetsOnly(entrySets).length
   }
   return count
+}
+
+export interface SetsForDate {
+  warmup: SetRecord[]
+  working: SetRecord[]
+}
+
+/**
+ * Sets logged for one exercise on one date, split by `isWarmup`, in
+ * insertion order — row *i* of the fixed-row set-entry UI maps to element
+ * *i* of the matching list. Relies on the same ascending-`id`-equals-
+ * insertion-order assumption `flattenHistorySets` already depends on.
+ *
+ * When `programExerciseId` is given, entries tagged with a *different*
+ * slot (or left untagged so far) are treated as having nothing logged —
+ * a free-form log of the same exercise on the same day shares the
+ * underlying entry (`getOrCreateExerciseEntry` matches on session+exercise
+ * only), so without this an ad-hoc set could silently fill a prescribed
+ * row. Passing no `programExerciseId` (or `undefined`) skips this check
+ * entirely and returns everything on the entry, tagged or not.
+ *
+ * This is entry-level, not set-level, scoping, and it only ever suppresses
+ * — it never separates sets that already share one tagged entry. Concretely:
+ * if a free-form log happens *before* this slot has logged anything, its
+ * read of `programExerciseId` sees nothing (correct, but only until the
+ * slot's own first log backfills the tag onto that same entry — the
+ * backfill in `getOrCreateExerciseEntry` never retags an already-tagged
+ * entry, but does adopt an untagged one). Once the entry is tagged to this
+ * slot — by that backfill, or because the slot logged first, which is the
+ * more common ordering since prescribed rows render above the free-form
+ * section — every set already on the entry, including an earlier or later
+ * free-form one, is indistinguishable from the slot's own and shows up in
+ * its rows. Only per-set attribution (`programExerciseId` on `SetRecord`
+ * itself, not just on the entry) would close that — out of scope here; see
+ * `workouts.test.ts`'s "KNOWN LIMITATION" test for the exact behavior this
+ * leaves in place.
+ */
+export async function getSetsForExerciseOnDate(
+  exerciseId: number,
+  date: string,
+  programExerciseId?: number
+): Promise<SetsForDate> {
+  const session = await db.workoutSessions.where('date').equals(date).first()
+  if (!session) return { warmup: [], working: [] }
+
+  const entry = await db.exerciseEntries
+    .where('sessionId')
+    .equals(session.id!)
+    .and((e) => e.exerciseId === exerciseId)
+    .first()
+  if (!entry) return { warmup: [], working: [] }
+  if (programExerciseId !== undefined && entry.programExerciseId !== programExerciseId) {
+    return { warmup: [], working: [] }
+  }
+
+  const sets = await db.sets.where('exerciseEntryId').equals(entry.id!).toArray()
+  return {
+    warmup: sets.filter((s) => s.isWarmup === true),
+    working: sets.filter((s) => s.isWarmup !== true),
+  }
+}
+
+export async function updateSet(
+  setId: number,
+  changes: { weightLbs: number; reps: number }
+): Promise<void> {
+  await db.sets.update(setId, changes)
 }
