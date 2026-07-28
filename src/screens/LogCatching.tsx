@@ -9,6 +9,7 @@ import {
   recordFramingDrill,
 } from '../db/catching'
 import { todayIso } from '../lib/dates'
+import './LogCatching.css'
 
 export function LogCatching() {
   const today = todayIso()
@@ -99,49 +100,63 @@ export function LogCatching() {
   }
 
   return (
-    <div>
+    <div className="log-catching">
       <h1>Log Catching</h1>
 
-      <section>
+      <section className="log-catching-section">
         <h2>Pop Time</h2>
-        <label htmlFor="pop-time-input">Pop time (seconds)</label>
-        <input
-          id="pop-time-input"
-          type="number"
-          step="0.01"
-          value={popTimeInput}
-          onChange={(e) => setPopTimeInput(e.target.value)}
-        />
-        <button type="button" onClick={addRep}>
+        <div className="log-catching-field">
+          <label htmlFor="pop-time-input">Pop time (seconds)</label>
+          <input
+            id="pop-time-input"
+            className="field"
+            type="number"
+            step="0.01"
+            value={popTimeInput}
+            onChange={(e) => setPopTimeInput(e.target.value)}
+          />
+        </div>
+        <button type="button" className="btn btn-primary" onClick={addRep}>
           Add Rep
         </button>
         {stats.best !== null && (
-          <p>
+          <p className="log-catching-stats">
             Best: {stats.best.toFixed(2)} | Average: {stats.average!.toFixed(2)}
           </p>
         )}
-        <ul>
+        <ul className="log-catching-list">
           {reps.map((r) => (
             <li key={r.id}>{r.seconds.toFixed(2)}s</li>
           ))}
         </ul>
       </section>
 
-      <section>
+      <section className="log-catching-section">
         <h2>Blocking</h2>
-        <label htmlFor="blocking-reps">Blocking reps</label>
-        <input id="blocking-reps" type="number" value={blockingReps} onChange={(e) => setBlockingReps(e.target.value)} />
-        <label htmlFor="blocking-successes">Blocking successes</label>
-        <input
-          id="blocking-successes"
-          type="number"
-          value={blockingSuccesses}
-          onChange={(e) => setBlockingSuccesses(e.target.value)}
-        />
-        <button type="button" onClick={saveBlocking}>
+        <div className="log-catching-field">
+          <label htmlFor="blocking-reps">Blocking reps</label>
+          <input
+            id="blocking-reps"
+            className="field"
+            type="number"
+            value={blockingReps}
+            onChange={(e) => setBlockingReps(e.target.value)}
+          />
+        </div>
+        <div className="log-catching-field">
+          <label htmlFor="blocking-successes">Blocking successes</label>
+          <input
+            id="blocking-successes"
+            className="field"
+            type="number"
+            value={blockingSuccesses}
+            onChange={(e) => setBlockingSuccesses(e.target.value)}
+          />
+        </div>
+        <button type="button" className="btn btn-primary" onClick={saveBlocking}>
           Save Blocking
         </button>
-        <ul>
+        <ul className="log-catching-list">
           {savedBlocking.map((b, i) => (
             <li key={i}>
               {b.reps} reps, {b.successes} successful
@@ -150,21 +165,32 @@ export function LogCatching() {
         </ul>
       </section>
 
-      <section>
+      <section className="log-catching-section">
         <h2>Framing</h2>
-        <label htmlFor="framing-reps">Framing reps</label>
-        <input id="framing-reps" type="number" value={framingReps} onChange={(e) => setFramingReps(e.target.value)} />
-        <label htmlFor="framing-successes">Framing successes</label>
-        <input
-          id="framing-successes"
-          type="number"
-          value={framingSuccesses}
-          onChange={(e) => setFramingSuccesses(e.target.value)}
-        />
-        <button type="button" onClick={saveFraming}>
+        <div className="log-catching-field">
+          <label htmlFor="framing-reps">Framing reps</label>
+          <input
+            id="framing-reps"
+            className="field"
+            type="number"
+            value={framingReps}
+            onChange={(e) => setFramingReps(e.target.value)}
+          />
+        </div>
+        <div className="log-catching-field">
+          <label htmlFor="framing-successes">Framing successes</label>
+          <input
+            id="framing-successes"
+            className="field"
+            type="number"
+            value={framingSuccesses}
+            onChange={(e) => setFramingSuccesses(e.target.value)}
+          />
+        </div>
+        <button type="button" className="btn btn-primary" onClick={saveFraming}>
           Save Framing
         </button>
-        <ul>
+        <ul className="log-catching-list">
           {savedFraming.map((f, i) => (
             <li key={i}>
               {f.reps} reps, {f.successes} successful

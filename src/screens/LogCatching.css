@@ -1,0 +1,22 @@
+.log-catching-section {
+  margin-bottom: var(--space-4);
+}
+
+.log-catching-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-2);
+  max-width: 240px;
+}
+
+.log-catching-stats {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.log-catching-list {
+  padding-left: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
