@@ -137,6 +137,18 @@ describe('listAllProgramDaysChronological', () => {
     expect(days[2].week.weekNumber).toBe(1)
   })
 
+  it('resolves the same day template to a different date in each week of a multi-week program', async () => {
+    const programId = await createProgram('Two Week Program', '2026-06-29', '2026-07-10')
+    await addProgramWeek(programId, 1, '2026-06-29', '2026-07-03')
+    await addProgramWeek(programId, 2, '2026-07-06', '2026-07-10')
+    await addProgramDay(programId, 1) // Monday template
+
+    const days = await listAllProgramDaysChronological()
+    expect(days.map((d) => d.date)).toEqual(['2026-06-29', '2026-07-06'])
+    expect(days[0].week.weekNumber).toBe(1)
+    expect(days[1].week.weekNumber).toBe(2)
+  })
+
   it('returns an empty list when there are no programs', async () => {
     const days = await listAllProgramDaysChronological()
     expect(days).toEqual([])
