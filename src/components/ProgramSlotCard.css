@@ -1,0 +1,119 @@
+.program-slot-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.program-slot-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.slot-form {
+  margin-top: var(--space-2);
+}
+
+.slot-form-last-week {
+  margin: 0 0 var(--space-2);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.set-row-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.set-row {
+  display: grid;
+  grid-template-columns: 24px 1fr 1fr 32px;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.set-row-number {
+  align-self: center;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.set-row-fields {
+  display: contents;
+}
+
+.set-row-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.set-row-field label {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.set-row-status {
+  align-self: center;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.set-row[data-status='logged'] .set-row-status {
+  color: var(--color-accent);
+}
+
+.set-row-save {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.set-row-pr {
+  grid-column: 1 / -1;
+}
+
+.set-row-add {
+  width: 100%;
+  margin-top: var(--space-1);
+}
+
+.set-row-checkbox-label {
+  grid-column: 2 / 4;
+  align-self: center;
+  font-size: 0.85rem;
+}
+
+.set-row-checkbox {
+  grid-column: 4;
+  justify-self: center;
+  align-self: center;
+  width: 20px;
+  height: 20px;
+}
+
+.category-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+
+.category-pill {
+  border: 1px solid var(--color-border);
+}
+
+.category-pill:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.category-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

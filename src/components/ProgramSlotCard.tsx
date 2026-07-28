@@ -15,6 +15,7 @@ import {
 } from '../db/programLogEntries'
 import { compareSimpleValues, compareWeightSets } from '../lib/compareProgress'
 import type { ProgressBadge } from '../lib/compareProgress'
+import './ProgramSlotCard.css'
 
 interface ProgramSlotCardProps {
   slot: ResolvedSlot
@@ -32,8 +33,11 @@ export function ProgramSlotCard({ slot, date, weekNumber }: ProgramSlotCardProps
   const { programExercise } = slot
 
   return (
-    <div>
-      <SlotHeader slot={slot} />
+    <div className="program-slot-card">
+      <div className="program-slot-card-header">
+        <SlotHeader slot={slot} />
+        {programExercise.blockLabel && <span className="pill">{programExercise.blockLabel}</span>}
+      </div>
 
       {programExercise.measureType === 'weight' && (
         <WeightSlotForm slot={slot} date={date} weekNumber={weekNumber} />
@@ -141,36 +145,48 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const rows = [...warmupRows, ...workingRows, ...extraRows, ...pendingRows]
 
   return (
-    <div>
+    <div className="slot-form">
       {lastWeekResult && (
-        <p>
+        <p className="slot-form-last-week">
           Last week: {lastWeekResult.weightLbs} lbs x {lastWeekResult.reps}
         </p>
       )}
-      {rows.map((row, i) => {
-        const rowLabel = row.isWarmup ? `Warmup ${i + 1}` : `Set ${i + 1 - warmupRows.length}`
-        return (
-          <WeightRow
-            key={row.key}
-            row={row}
-            rowLabel={rowLabel}
-            slot={slot}
-            date={date}
-            weekNumber={weekNumber}
-          />
-        )
-      })}
+      <div className="set-row-grid">
+        {rows.map((row, i) => {
+          const rowNumber = row.isWarmup ? i + 1 : i + 1 - warmupRows.length
+          const rowLabel = row.isWarmup ? `Warmup ${rowNumber}` : `Set ${rowNumber}`
+          return (
+            <WeightRow
+              key={row.key}
+              row={row}
+              rowLabel={rowLabel}
+              rowNumber={rowNumber}
+              slot={slot}
+              date={date}
+              weekNumber={weekNumber}
+            />
+          )
+        })}
+      </div>
       {/* A row's set is attributed by insertion order (getSetsForExerciseOnDate's
           contract), not by which row's button the user clicked — so an extra set
           logged before the prescribed rows are done would land on an earlier,
           untouched row instead of at the end. Gating this on the prescription
           being complete keeps every new save unambiguously "the next row." */}
       {pendingCount === 0 && loggedSets.working.length >= workingTargets.length && (
-        <button type="button" onClick={() => setExtraSlotCount((c) => c + 1)}>
+        <button
+          type="button"
+          className="btn btn-ghost set-row-add"
+          onClick={() => setExtraSlotCount((c) => c + 1)}
+        >
           + Add extra set
         </button>
       )}
-      {progressBadge && <p role="status">{BADGE_LABEL[progressBadge]}</p>}
+      {progressBadge && (
+        <p role="status" className="status-badge">
+          {BADGE_LABEL[progressBadge]}
+        </p>
+      )}
     </div>
   )
 }
@@ -178,12 +194,14 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
 function WeightRow({
   row,
   rowLabel,
+  rowNumber,
   slot,
   date,
   weekNumber,
 }: {
   row: SetRow
   rowLabel: string
+  rowNumber: number
   slot: ResolvedSlot
   date: string
   weekNumber: number
@@ -238,19 +256,49 @@ function WeightRow({
     }
   }
 
+  const status: 'logged' | 'open' = row.set ? 'logged' : 'open'
+
   return (
-    <div>
-      <span>
-        {rowLabel} (target {row.targetReps})
+    <div className="set-row" data-status={status}>
+      <span className="set-row-number">{rowNumber}</span>
+      <div className="set-row-fields">
+        <div className="set-row-field">
+          <label htmlFor={weightId}>Weight (lbs) — {rowLabel}</label>
+          <input
+            id={weightId}
+            className="field"
+            type="number"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+          />
+        </div>
+        <div className="set-row-field">
+          <label htmlFor={repsId}>Reps — {rowLabel}</label>
+          <input
+            id={repsId}
+            className="field"
+            type="number"
+            value={reps}
+            onChange={(e) => setReps(e.target.value)}
+          />
+        </div>
+      </div>
+      <span className="set-row-status" aria-hidden="true">
+        {row.set ? '✓' : '○'}
       </span>
-      <label htmlFor={weightId}>Weight (lbs) — {rowLabel}</label>
-      <input id={weightId} type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
-      <label htmlFor={repsId}>Reps — {rowLabel}</label>
-      <input id={repsId} type="number" value={reps} onChange={(e) => setReps(e.target.value)} />
-      <button type="button" onClick={handleSave} disabled={isSubmitting || (!row.set && !row.canLog)}>
+      <button
+        type="button"
+        className="btn btn-primary set-row-save"
+        onClick={handleSave}
+        disabled={isSubmitting || (!row.set && !row.canLog)}
+      >
         {row.set ? 'Update' : 'Log set'}
       </button>
-      {prMessage && <p role="status">{prMessage}</p>}
+      {prMessage && (
+        <p role="status" className="pr-badge set-row-pr">
+          ★ {prMessage}
+        </p>
+      )}
     </div>
   )
 }
@@ -327,44 +375,56 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   ]
 
   return (
-    <div>
-      {lastWeekValue !== undefined && <p>Last week: {lastWeekValue}</p>}
-      {rows.map((row) => {
-        const checked = row.index < loggedValues.length
-        // Only the next open row can be checked, and only the most-recently-
-        // checked row can be unchecked — any other checked row is clickable
-        // in the DOM by default (its own handler just no-ops), which reads
-        // as an affordance it won't honor. Disable it explicitly instead.
-        const disabled =
-          isSubmitting ||
-          (checked ? row.index !== loggedValues.length - 1 : row.index !== loggedValues.length)
-        const checkboxId = `set-${programExerciseId}-${row.index}`
-        return (
-          <div key={row.index}>
-            <label htmlFor={checkboxId}>
-              Set {row.index + 1} (target {row.target})
-            </label>
-            <input
-              id={checkboxId}
-              type="checkbox"
-              checked={checked}
-              disabled={disabled}
-              onChange={(e) =>
-                e.target.checked ? handleCheck(row.index, row.target) : handleUncheck(row.index)
-              }
-            />
-          </div>
-        )
-      })}
+    <div className="slot-form">
+      {lastWeekValue !== undefined && <p className="slot-form-last-week">Last week: {lastWeekValue}</p>}
+      <div className="set-row-grid">
+        {rows.map((row) => {
+          const checked = row.index < loggedValues.length
+          // Only the next open row can be checked, and only the most-recently-
+          // checked row can be unchecked — any other checked row is clickable
+          // in the DOM by default (its own handler just no-ops), which reads
+          // as an affordance it won't honor. Disable it explicitly instead.
+          const disabled =
+            isSubmitting ||
+            (checked ? row.index !== loggedValues.length - 1 : row.index !== loggedValues.length)
+          const checkboxId = `set-${programExerciseId}-${row.index}`
+          return (
+            <div key={row.index} className="set-row" data-status={checked ? 'logged' : 'open'}>
+              <span className="set-row-number">{row.index + 1}</span>
+              <label htmlFor={checkboxId} className="set-row-checkbox-label">
+                Set {row.index + 1} (target {row.target})
+              </label>
+              <input
+                id={checkboxId}
+                className="set-row-checkbox"
+                type="checkbox"
+                checked={checked}
+                disabled={disabled}
+                onChange={(e) =>
+                  e.target.checked ? handleCheck(row.index, row.target) : handleUncheck(row.index)
+                }
+              />
+            </div>
+          )
+        })}
+      </div>
       {/* No working targets at all (e.g. no prescription for this week) means
           there's no target value to log an extra row with — lastTarget would
           fall back to 0, which the checkbox would then log verbatim. */}
       {pendingExtraCount === 0 && lastTarget > 0 && (
-        <button type="button" onClick={() => setExtraRowRequestCount((c) => c + 1)}>
+        <button
+          type="button"
+          className="btn btn-ghost set-row-add"
+          onClick={() => setExtraRowRequestCount((c) => c + 1)}
+        >
           + Add extra set
         </button>
       )}
-      {progressBadge && <p role="status">{BADGE_LABEL[progressBadge]}</p>}
+      {progressBadge && (
+        <p role="status" className="status-badge">
+          {BADGE_LABEL[progressBadge]}
+        </p>
+      )}
     </div>
   )
 }
@@ -429,21 +489,25 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
   }
 
   return (
-    <div>
-      <p>Logged today: {loggedCategories.length > 0 ? loggedCategories.join(', ') : 'none'}</p>
+    <div className="slot-form">
+      <p className="slot-form-last-week">
+        Logged today: {loggedCategories.length > 0 ? loggedCategories.join(', ') : 'none'}
+      </p>
       {(capReached || rejectedByCap) && (
-        <p>
+        <p className="status-badge">
           You've logged {categoriesToPick} categories today — the max for this exercise
         </p>
       )}
-      <div>
+      <div className="category-picker">
         {categoryOptions.map((category) => {
           const alreadyLogged = loggedCategories.includes(category.categoryLabel)
           const disabled = capReached && !alreadyLogged
+          const selected = selectedCategory === category.categoryLabel
           return (
             <button
               key={category.categoryLabel}
               type="button"
+              className={`pill category-pill${selected ? ' pill-selected' : ''}`}
               disabled={disabled}
               onClick={() => {
                 setSelectedCategory(category.categoryLabel)
@@ -456,15 +520,16 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
         })}
       </div>
       {selectedCategory && (
-        <div>
+        <div className="category-detail">
           {lastWeekCategoryValue !== undefined && (
-            <p>
+            <p className="slot-form-last-week">
               Last week ({selectedCategory}): {lastWeekCategoryValue}
             </p>
           )}
           <label htmlFor={`exercise-${programExerciseId}`}>Exercise</label>
           <select
             id={`exercise-${programExerciseId}`}
+            className="field"
             value={selectedExercise}
             onChange={(e) => setSelectedExercise(e.target.value)}
           >
@@ -482,14 +547,19 @@ function CategoryChoiceSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps
           <label htmlFor={`value-${programExerciseId}`}>Value</label>
           <input
             id={`value-${programExerciseId}`}
+            className="field"
             type="number"
             value={value}
             onChange={(e) => setValue(e.target.value)}
           />
-          <button type="button" onClick={handleSave} disabled={isSubmitting}>
+          <button type="button" className="btn btn-primary" onClick={handleSave} disabled={isSubmitting}>
             Save
           </button>
-          {progressBadge && <p role="status">{BADGE_LABEL[progressBadge]}</p>}
+          {progressBadge && (
+            <p role="status" className="status-badge">
+              {BADGE_LABEL[progressBadge]}
+            </p>
+          )}
           {loggedCategories.includes(selectedCategory) && <p>{selectedCategory} logged</p>}
         </div>
       )}
