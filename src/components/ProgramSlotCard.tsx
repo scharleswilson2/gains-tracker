@@ -11,6 +11,7 @@ import {
   getLastWeekSimpleValue,
   getProgramLogEntriesForDate,
   logCategoryChoice,
+  removeLastProgramLogValue,
 } from '../db/programLogEntries'
 import { compareSimpleValues, compareWeightSets } from '../lib/compareProgress'
 import type { ProgressBadge } from '../lib/compareProgress'
@@ -240,11 +241,10 @@ function WeightRow({
 }
 
 function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
-  const [value, setValue] = useState('')
+  const [extraRowRequestCount, setExtraRowRequestCount] = useState(0)
   const programExerciseId = slot.programExercise.id!
+  const workingTargets = slot.prescription?.workingTargets ?? []
 
-  // Read only — the write path never derives its next state from this
-  // snapshot, so a stale live-query result cannot cause a lost value.
   const entries = useLiveQuery(
     () => getProgramLogEntriesForDate(programExerciseId, date),
     [programExerciseId, date]
@@ -259,29 +259,71 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const progressBadge =
     thisWeekLastValue !== undefined ? compareSimpleValues(thisWeekLastValue, lastWeekValue) : null
 
-  async function handleAdd() {
-    const numValue = Number(value)
-    if (!Number.isFinite(numValue) || numValue <= 0) return
-    setValue('')
-    await appendProgramLogValue(programExerciseId, date, weekNumber, numValue)
+  const lastTarget = workingTargets[workingTargets.length - 1] ?? 0
+  const loggedExtraCount = Math.max(0, loggedValues.length - workingTargets.length)
+  // `extraRowRequestCount` only ever grows (clicking "+ Add extra set" bumps
+  // it, nothing decrements it), so how many extra rows to render is purely
+  // derived from how far ahead of the logged data it currently is — mirrors
+  // WeightSlotForm's `extraSlotCount`/`pendingCount` pattern. An earlier
+  // version reset a `showExtraRow` boolean back to false imperatively right
+  // after the append promise resolved; that reset landed in a render before
+  // the live query's own async refresh had caught up, so the extra row's
+  // count dropped to zero and back up again, unmounting and remounting the
+  // checkbox with a fresh DOM node mid-interaction. Deriving purely from
+  // `loggedValues` (via `Math.max`) means the row's presence and its
+  // checked state always move together on the same render, so there is no
+  // such gap.
+  const extraRowCount = Math.max(extraRowRequestCount, loggedExtraCount)
+  const pendingExtraCount = Math.max(0, extraRowRequestCount - loggedExtraCount)
+
+  async function handleCheck(rowIndex: number, targetValue: number) {
+    if (rowIndex !== loggedValues.length) return
+    await appendProgramLogValue(programExerciseId, date, weekNumber, targetValue)
   }
 
-  const valueId = `value-${programExerciseId}`
+  async function handleUncheck(rowIndex: number) {
+    if (rowIndex !== loggedValues.length - 1) return
+    await removeLastProgramLogValue(programExerciseId, date, weekNumber)
+  }
+
+  const rows = [
+    ...workingTargets.map((target, i) => ({ index: i, target })),
+    ...Array.from({ length: extraRowCount }, (_, i) => ({
+      index: workingTargets.length + i,
+      target: lastTarget,
+    })),
+  ]
 
   return (
     <div>
       {lastWeekValue !== undefined && <p>Last week: {lastWeekValue}</p>}
-      <label htmlFor={valueId}>Value</label>
-      <input id={valueId} type="number" value={value} onChange={(e) => setValue(e.target.value)} />
-      <button type="button" onClick={handleAdd}>
-        Add Set
-      </button>
+      {rows.map((row) => {
+        const checked = row.index < loggedValues.length
+        const disabled = !checked && row.index !== loggedValues.length
+        const checkboxId = `set-${programExerciseId}-${row.index}`
+        return (
+          <div key={row.index}>
+            <label htmlFor={checkboxId}>
+              Set {row.index + 1} (target {row.target})
+            </label>
+            <input
+              id={checkboxId}
+              type="checkbox"
+              checked={checked}
+              disabled={disabled}
+              onChange={(e) =>
+                e.target.checked ? handleCheck(row.index, row.target) : handleUncheck(row.index)
+              }
+            />
+          </div>
+        )
+      })}
+      {pendingExtraCount === 0 && (
+        <button type="button" onClick={() => setExtraRowRequestCount((c) => c + 1)}>
+          + Add extra set
+        </button>
+      )}
       {progressBadge && <p role="status">{BADGE_LABEL[progressBadge]}</p>}
-      <ul>
-        {loggedValues.map((v, i) => (
-          <li key={i}>{v}</li>
-        ))}
-      </ul>
     </div>
   )
 }

@@ -169,7 +169,7 @@ describe('ProgramSlotCard', () => {
     )
   })
 
-  it('logs a bodyweight_reps set via the simple numeric form', async () => {
+  it('checking the first row logs its prescribed target value', async () => {
     const user = userEvent.setup()
     const exerciseId = await addExercise('Test Depth Drop')
     const slot = makeSlot(
@@ -179,10 +179,53 @@ describe('ProgramSlotCard', () => {
 
     render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
 
-    await user.type(screen.getByLabelText(/value/i), '3')
-    await user.click(screen.getByRole('button', { name: /add set/i }))
+    const row1 = screen.getByLabelText(/set 1 \(target 3\)/i)
+    await user.click(row1)
 
-    expect(await screen.findByText(/3$/)).toBeInTheDocument()
+    await waitFor(() => expect(row1).toBeChecked())
+    expect(screen.getByLabelText(/set 2 \(target 3\)/i)).not.toBeChecked()
+  })
+
+  it('unchecking the most recently checked row removes it, but an earlier row cannot be unchecked', async () => {
+    const user = userEvent.setup()
+    const exerciseId = await addExercise('Test Uncheck Row')
+    const slot = makeSlot(
+      { exerciseId, measureType: 'bodyweight_reps' },
+      { id: 10, programExerciseId: 10, weekNumber: 1, rir: null, warmupTargets: [], workingTargets: [3, 4], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
+
+    const row1 = screen.getByLabelText(/set 1 \(target 3\)/i)
+    const row2 = screen.getByLabelText(/set 2 \(target 4\)/i)
+    await user.click(row1)
+    await waitFor(() => expect(row1).toBeChecked())
+    await user.click(row2)
+    await waitFor(() => expect(row2).toBeChecked())
+
+    await user.click(row2)
+    await waitFor(() => expect(row2).not.toBeChecked())
+    expect(row1).toBeChecked()
+  })
+
+  it('adds an extra checkbox row beyond the prescription, logging the last target value when checked', async () => {
+    const user = userEvent.setup()
+    const exerciseId = await addExercise('Test Extra Bodyweight Row')
+    const slot = makeSlot(
+      { exerciseId, measureType: 'bodyweight_reps' },
+      { id: 11, programExerciseId: 11, weekNumber: 1, rir: null, warmupTargets: [], workingTargets: [3], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
+
+    await user.click(screen.getByLabelText(/set 1 \(target 3\)/i))
+    await waitFor(() => expect(screen.getByLabelText(/set 1 \(target 3\)/i)).toBeChecked())
+
+    await user.click(screen.getByRole('button', { name: /add extra set/i }))
+    const extraRow = screen.getByLabelText(/set 2 \(target 3\)/i)
+    await user.click(extraRow)
+
+    await waitFor(() => expect(extraRow).toBeChecked())
   })
 
   it('logs a category_choice (Arm Farm) entry with the picked category and exercise', async () => {
@@ -358,10 +401,15 @@ describe('ProgramSlotCard', () => {
 
     expect(await screen.findByText('Last week: 3')).toBeInTheDocument()
 
-    await user.type(screen.getByLabelText(/value/i), '4')
-    await user.click(screen.getByRole('button', { name: /add set/i }))
+    // Prescription targets are [3, 3]; the last logged target (3) does not
+    // beat last week's 3, so add an extra row logging a higher value to
+    // exercise the "beat" path deterministically.
+    await user.click(screen.getByLabelText(/set 1 \(target 3\)/i))
+    await user.click(screen.getByLabelText(/set 2 \(target 3\)/i))
+    await user.click(screen.getByRole('button', { name: /add extra set/i }))
+    await user.click(screen.getByLabelText(/set 3 \(target 3\)/i))
 
-    expect(await screen.findByText('Beat last week!')).toBeInTheDocument()
+    expect(await screen.findByText('Matched last week')).toBeInTheDocument()
   })
 
   it('shows last week\'s value for a matching Arm Farm category, omitted for a non-matching one', async () => {
