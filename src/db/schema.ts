@@ -26,7 +26,6 @@ export interface SetRecord {
   exerciseEntryId: number
   weightLbs: number
   reps: number
-  rpe?: number
   isWarmup?: boolean
 }
 

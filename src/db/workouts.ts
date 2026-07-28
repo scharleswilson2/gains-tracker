@@ -35,10 +35,9 @@ export async function addSet(
   exerciseEntryId: number,
   weightLbs: number,
   reps: number,
-  rpe?: number,
   isWarmup = false
 ): Promise<number> {
-  return db.sets.add({ exerciseEntryId, weightLbs, reps, rpe, isWarmup })
+  return db.sets.add({ exerciseEntryId, weightLbs, reps, isWarmup })
 }
 
 export function workingSetsOnly(sets: SetRecord[]): SetRecord[] {

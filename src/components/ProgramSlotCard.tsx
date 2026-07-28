@@ -51,7 +51,6 @@ export function ProgramSlotCard({ slot, date, weekNumber }: ProgramSlotCardProps
 function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
-  const [rpe, setRpe] = useState('')
   const [isWarmup, setIsWarmup] = useState(false)
   const [prMessage, setPrMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -90,7 +89,7 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
     if (isSubmitting) return
     const weightLbs = Number(weight)
     const repsNum = Number(reps)
-    const rpeNum = rpe ? Number(rpe) : undefined
+
     if (!(weightLbs > 0) || !Number.isInteger(repsNum) || repsNum <= 0) return
 
     setIsSubmitting(true)
@@ -100,14 +99,12 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
         date,
         weightLbs,
         reps: repsNum,
-        rpe: rpeNum,
         isWarmup,
         programExerciseId: slot.programExercise.id,
         weekNumber,
       })
       setWeight('')
       setReps('')
-      setRpe('')
       setIsWarmup(false)
       setPrMessage(!isWarmup && (pr.isWeightPr || pr.isEstimated1RmPr) ? 'PR!' : null)
     } finally {
@@ -117,7 +114,6 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
 
   const weightId = `weight-${slot.programExercise.id}`
   const repsId = `reps-${slot.programExercise.id}`
-  const rpeId = `rpe-${slot.programExercise.id}`
   const warmupId = `warmup-${slot.programExercise.id}`
 
   return (
@@ -131,8 +127,6 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
       <input id={weightId} type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
       <label htmlFor={repsId}>Reps</label>
       <input id={repsId} type="number" value={reps} onChange={(e) => setReps(e.target.value)} />
-      <label htmlFor={rpeId}>RPE (optional)</label>
-      <input id={rpeId} type="number" value={rpe} onChange={(e) => setRpe(e.target.value)} />
       {hasWarmupTargets && (
         <>
           <label htmlFor={warmupId}>Warmup set</label>

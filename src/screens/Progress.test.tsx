@@ -58,7 +58,7 @@ describe('Progress', () => {
     const exerciseId = await addExercise('Test Warmup Squat')
     const session1 = await getOrCreateSessionForDate('2026-06-29')
     const entry1 = await getOrCreateExerciseEntry(session1, exerciseId, undefined, 1)
-    await addSet(entry1, 315, 5, undefined, true) // warmup — would look like a huge "PR" if counted
+    await addSet(entry1, 315, 5, true) // warmup — would look like a huge "PR" if counted
 
     render(<Progress />)
     await user.selectOptions(await screen.findByLabelText(/select exercise/i), 'Test Warmup Squat')

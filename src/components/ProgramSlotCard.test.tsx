@@ -5,7 +5,6 @@ import { ProgramSlotCard } from './ProgramSlotCard'
 import { addExercise } from '../db/exercises'
 import { getOrCreateSessionForDate, getOrCreateExerciseEntry, addSet } from '../db/workouts'
 import { logCategoryChoice, upsertProgramLogEntry } from '../db/programLogEntries'
-import { db } from '../db/schema'
 import type { ResolvedSlot } from '../db/programExercises'
 
 function makeSlot(overrides: Partial<ResolvedSlot['programExercise']>, prescription: ResolvedSlot['prescription']): ResolvedSlot {
@@ -103,26 +102,6 @@ describe('ProgramSlotCard', () => {
     await user.click(screen.getByRole('button', { name: /save/i }))
 
     expect(await screen.findByText(/Triceps.*logged/i)).toBeInTheDocument()
-  })
-
-  it('logs a weight set with an RPE value and persists it on the underlying set', async () => {
-    const user = userEvent.setup()
-    const exerciseId = await addExercise('Test Overhead Press')
-    const slot = makeSlot(
-      { exerciseId, measureType: 'weight' },
-      { id: 6, programExerciseId: 6, weekNumber: 1, rir: 'M', warmupTargets: [], workingTargets: [3, 3, 3, 5], isTest: false }
-    )
-
-    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
-
-    await user.type(screen.getByLabelText(/weight/i), '135')
-    await user.type(screen.getByLabelText(/reps/i), '5')
-    await user.type(screen.getByLabelText(/rpe/i), '8')
-    await user.click(screen.getByRole('button', { name: /add set/i }))
-
-    await screen.findByText(/pr!/i)
-    const sets = await db.sets.toArray()
-    expect(sets.some((s) => s.weightLbs === 135 && s.reps === 5 && s.rpe === 8)).toBe(true)
   })
 
   it('disables not-yet-logged category buttons once categoriesToPick is reached, but keeps already-logged ones enabled', async () => {

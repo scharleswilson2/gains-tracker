@@ -64,12 +64,12 @@ describe('workouts data layer', () => {
 
     const session2 = await getOrCreateSessionForDate('2026-07-22')
     const entry2 = await getOrCreateExerciseEntry(session2, exerciseId)
-    await addSet(entry2, 195, 5, 8)
+    await addSet(entry2, 195, 5)
 
     const history = await getExerciseHistory(exerciseId)
     expect(history.map((h) => h.date)).toEqual(['2026-07-15', '2026-07-22'])
     expect(history[1].sets).toEqual([
-      expect.objectContaining({ weightLbs: 195, reps: 5, rpe: 8 }),
+      expect.objectContaining({ weightLbs: 195, reps: 5 }),
     ])
   })
 
@@ -136,7 +136,7 @@ describe('workouts data layer', () => {
     const exerciseId = await addExercise('Test Isolation Exercise 2')
     const sessionId = await getOrCreateSessionForDate('2026-07-01')
     const entryId = await getOrCreateExerciseEntry(sessionId, exerciseId)
-    const setId = await addSet(entryId, 45, 5, undefined, true)
+    const setId = await addSet(entryId, 45, 5, true)
     const set = await db.sets.get(setId)
     expect(set?.isWarmup).toBe(true)
   })
@@ -178,12 +178,12 @@ describe('getWorkingSetHistory', () => {
     const exerciseId = await addExercise('Test Warmup Exercise')
     const session1 = await getOrCreateSessionForDate('2026-07-01')
     const entry1 = await getOrCreateExerciseEntry(session1, exerciseId)
-    await addSet(entry1, 45, 5, undefined, true) // warmup only this session
+    await addSet(entry1, 45, 5, true) // warmup only this session
 
     const session2 = await getOrCreateSessionForDate('2026-07-08')
     const entry2 = await getOrCreateExerciseEntry(session2, exerciseId)
-    await addSet(entry2, 45, 5, undefined, true) // warmup
-    await addSet(entry2, 225, 5, undefined, false) // working set
+    await addSet(entry2, 45, 5, true) // warmup
+    await addSet(entry2, 225, 5, false) // working set
 
     const history = await getWorkingSetHistory(exerciseId)
     expect(history).toHaveLength(1) // 2026-07-01 dropped entirely (all warmup)
@@ -231,7 +231,7 @@ describe('getLastWeekWeightResult', () => {
     const session = await getOrCreateSessionForDate('2026-07-13')
     const entry = await getOrCreateExerciseEntry(session, exerciseId, 11, 3)
     await addSet(entry, 205, 5)
-    await addSet(entry, 45, 8, undefined, true) // warmup, logged last
+    await addSet(entry, 45, 8, true) // warmup, logged last
 
     const result = await getLastWeekWeightResult(exerciseId, 11, 3)
     expect(result?.weightLbs).toBe(205)
@@ -285,7 +285,7 @@ describe('getWorkingSetCountForSlotWeek', () => {
     const exerciseId = await addExercise('Test Set Count')
     const session = await getOrCreateSessionForDate('2026-07-13')
     const entry = await getOrCreateExerciseEntry(session, exerciseId, 70, 3)
-    await addSet(entry, 45, 5, undefined, true) // warmup, not counted
+    await addSet(entry, 45, 5, true) // warmup, not counted
     await addSet(entry, 205, 5)
     await addSet(entry, 205, 4)
 

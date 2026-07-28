@@ -15,7 +15,6 @@ export function LogLift() {
   const [selectedExerciseName, setSelectedExerciseName] = useState('')
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
-  const [rpe, setRpe] = useState('')
   const [prMessage, setPrMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -54,7 +53,6 @@ export function LogLift() {
     if (!selectedExerciseId || isSubmitting) return
     const weightLbs = Number(weight)
     const repsNum = Number(reps)
-    const rpeNum = rpe ? Number(rpe) : undefined
 
     if (!(weightLbs > 0) || !Number.isInteger(repsNum) || repsNum <= 0) {
       return
@@ -67,12 +65,10 @@ export function LogLift() {
         date: today,
         weightLbs,
         reps: repsNum,
-        rpe: rpeNum,
       })
 
       setWeight('')
       setReps('')
-      setRpe('')
       setPrMessage(pr.isWeightPr || pr.isEstimated1RmPr ? 'PR!' : null)
     } finally {
       setIsSubmitting(false)
@@ -170,10 +166,6 @@ export function LogLift() {
               onChange={(e) => setReps(e.target.value)}
             />
           </div>
-          <div>
-            <label htmlFor="rpe-input">RPE (optional)</label>
-            <input id="rpe-input" type="number" value={rpe} onChange={(e) => setRpe(e.target.value)} />
-          </div>
           <button type="button" onClick={handleAddSet} disabled={isSubmitting}>
             Add Set
           </button>
@@ -185,7 +177,6 @@ export function LogLift() {
             {(todaySets ?? []).map((s, i) => (
               <li key={i}>
                 {s.weightLbs} x {s.reps}
-                {s.rpe ? ` @RPE ${s.rpe}` : ''}
               </li>
             ))}
           </ul>
