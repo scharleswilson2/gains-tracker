@@ -169,6 +169,44 @@ describe('ProgramSlotCard', () => {
     )
   })
 
+  it('disables "Log set" on every not-yet-logged row except the next one, so logging cannot land on the wrong row', async () => {
+    const user = userEvent.setup()
+    const exerciseId = await addExercise('Test Out Of Order Guard')
+    const slot = makeSlot(
+      { exerciseId, measureType: 'weight' },
+      { id: 13, programExerciseId: 13, weekNumber: 1, rir: 'M', warmupTargets: [], workingTargets: [3, 3, 3], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
+
+    const logButtons = screen.getAllByRole('button', { name: /log set/i })
+    expect(logButtons).toHaveLength(3)
+    expect(logButtons[0]).toBeEnabled()
+    expect(logButtons[1]).toBeDisabled()
+    expect(logButtons[2]).toBeDisabled()
+
+    // Filling Set 3's own inputs and clicking its (disabled) button must
+    // not log anything under Set 1 — attempting the click is a no-op.
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 3/i), '200')
+    await user.click(logButtons[2])
+    expect(screen.getByLabelText(/weight \(lbs\) — set 1/i)).toHaveValue(null)
+    expect(screen.getAllByRole('button', { name: /log set/i })).toHaveLength(3)
+
+    // Logging Set 1 for real advances the guard to Set 2.
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 1/i), '90')
+    await user.clear(screen.getByLabelText(/reps — set 1/i))
+    await user.type(screen.getByLabelText(/reps — set 1/i), '3')
+    await user.click(logButtons[0])
+
+    await waitFor(() => {
+      const remaining = screen.getAllByRole('button', { name: /log set/i })
+      expect(remaining).toHaveLength(2)
+      expect(remaining[0]).toBeEnabled()
+      expect(remaining[1]).toBeDisabled()
+    })
+    expect(screen.getByLabelText(/weight \(lbs\) — set 1/i)).toHaveValue(90)
+  })
+
   it('checking the first row logs its prescribed target value', async () => {
     const user = userEvent.setup()
     const exerciseId = await addExercise('Test Depth Drop')
@@ -405,7 +443,7 @@ describe('ProgramSlotCard', () => {
     expect(screen.queryByText(/Last week/)).not.toBeInTheDocument()
   })
 
-  it('shows last week\'s value and a beat badge for a simple-value slot', async () => {
+  it('shows last week\'s value and a matched badge for a simple-value slot', async () => {
     const user = userEvent.setup()
     const exerciseId = await addExercise('Test Depth Drop Progress')
     await upsertProgramLogEntry({
@@ -424,15 +462,43 @@ describe('ProgramSlotCard', () => {
 
     expect(await screen.findByText('Last week: 3')).toBeInTheDocument()
 
-    // Prescription targets are [3, 3]; the last logged target (3) does not
-    // beat last week's 3, so add an extra row logging a higher value to
-    // exercise the "beat" path deterministically.
+    // Checkbox rows log the exact prescribed target with no numeric
+    // override, so this week's achievable outcome is fixed by the
+    // prescription rather than typed input. Prescription targets are
+    // [3, 3] here — same as last week's 3 — so completing them (including
+    // an extra row, which also logs the last defined target) can only ever
+    // match, never beat, last week's value. See the next test for a
+    // prescription that legitimately beats last week.
     await user.click(screen.getByLabelText(/set 1 \(target 3\)/i))
     await user.click(screen.getByLabelText(/set 2 \(target 3\)/i))
     await user.click(screen.getByRole('button', { name: /add extra set/i }))
     await user.click(screen.getByLabelText(/set 3 \(target 3\)/i))
 
     expect(await screen.findByText('Matched last week')).toBeInTheDocument()
+  })
+
+  it('shows a beat badge for a simple-value slot when this week\'s prescribed target exceeds last week\'s value', async () => {
+    const user = userEvent.setup()
+    const exerciseId = await addExercise('Test Depth Drop Beat Progress')
+    await upsertProgramLogEntry({
+      programExerciseId: 56,
+      date: '2026-07-13',
+      weekNumber: 3,
+      values: [2],
+      isWarmup: [false],
+    })
+    const slot = makeSlot(
+      { id: 56, exerciseId, measureType: 'bodyweight_reps' },
+      { id: 8, programExerciseId: 56, weekNumber: 4, rir: null, warmupTargets: [], workingTargets: [3], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-20" weekNumber={4} />)
+
+    expect(await screen.findByText('Last week: 2')).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText(/set 1 \(target 3\)/i))
+
+    expect(await screen.findByText('Beat last week!')).toBeInTheDocument()
   })
 
   it('shows last week\'s value for a matching Arm Farm category, omitted for a non-matching one', async () => {

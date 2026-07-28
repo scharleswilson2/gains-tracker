@@ -153,13 +153,37 @@ export interface SetsForDate {
  * insertion order — row *i* of the fixed-row set-entry UI maps to element
  * *i* of the matching list. Relies on the same ascending-`id`-equals-
  * insertion-order assumption `flattenHistorySets` already depends on.
+ *
+ * When `programExerciseId` is given, only returns sets whose exercise
+ * entry is tagged with that same slot — a free-form log of the same
+ * exercise on the same day shares the underlying entry (`getOrCreate
+ * ExerciseEntry` matches on session+exercise only), so without this an
+ * ad-hoc set logged first would silently fill a prescribed row. This
+ * covers the common ordering (prescribed slot logged before any free-form
+ * log of the same exercise that day); if free-form logging happens first
+ * and the slot backfills the tag afterward, that earlier free-form set
+ * still ends up attributed to the slot — full per-set attribution would
+ * need `programExerciseId` on `SetRecord` itself, out of scope here.
  */
 export async function getSetsForExerciseOnDate(
   exerciseId: number,
-  date: string
+  date: string,
+  programExerciseId?: number
 ): Promise<SetsForDate> {
-  const history = await getExerciseHistory(exerciseId)
-  const sets = history.find((h) => h.date === date)?.sets ?? []
+  const session = await db.workoutSessions.where('date').equals(date).first()
+  if (!session) return { warmup: [], working: [] }
+
+  const entry = await db.exerciseEntries
+    .where('sessionId')
+    .equals(session.id!)
+    .and((e) => e.exerciseId === exerciseId)
+    .first()
+  if (!entry) return { warmup: [], working: [] }
+  if (programExerciseId !== undefined && entry.programExerciseId !== programExerciseId) {
+    return { warmup: [], working: [] }
+  }
+
+  const sets = await db.sets.where('exerciseEntryId').equals(entry.id!).toArray()
   return {
     warmup: sets.filter((s) => s.isWarmup === true),
     working: sets.filter((s) => s.isWarmup !== true),

@@ -335,6 +335,41 @@ describe('getSetsForExerciseOnDate', () => {
     const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27')
     expect(result.working.map((s) => s.weightLbs)).toEqual([105])
   })
+
+  it('with no programExerciseId argument, returns sets regardless of which slot (if any) tagged the entry', async () => {
+    const exerciseId = await addExercise('Test Untagged Scope')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 999, 1)
+    await addSet(entry, 135, 5)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27')
+    expect(result.working.map((s) => s.weightLbs)).toEqual([135])
+  })
+
+  it('with a matching programExerciseId, returns the entry\'s sets', async () => {
+    const exerciseId = await addExercise('Test Matching Slot Scope')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 42, 1)
+    await addSet(entry, 135, 5)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27', 42)
+    expect(result.working.map((s) => s.weightLbs)).toEqual([135])
+  })
+
+  it('with a non-matching programExerciseId, returns empty rather than another slot\'s (or free-form\'s) sets', async () => {
+    const exerciseId = await addExercise('Test Cross Slot Contamination')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    // Simulates a free-form log (no programExerciseId) of the same exercise
+    // also prescribed today under slot 42 — both share one exercise entry
+    // (getOrCreateExerciseEntry matches on session+exercise only), so
+    // without scoping, slot 42's rows would show this free-form set as if
+    // it were one of its own prescribed sets.
+    const entry = await getOrCreateExerciseEntry(session, exerciseId)
+    await addSet(entry, 135, 5)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27', 42)
+    expect(result).toEqual({ warmup: [], working: [] })
+  })
 })
 
 describe('updateSet', () => {

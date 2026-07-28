@@ -55,6 +55,13 @@ interface SetRow {
   isWarmup: boolean
   targetReps: number
   set: SetRecord | null
+  // Whether this row is the next one that logging a new set will actually
+  // land on — a row's set is attributed by insertion order (see
+  // getSetsForExerciseOnDate), not by which row's button was clicked, so
+  // any not-yet-logged row other than the next one must not offer to log:
+  // doing so would silently fill an earlier row instead. Already-logged
+  // rows are always independently editable regardless of this flag.
+  canLog: boolean
 }
 
 function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
@@ -67,8 +74,8 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const targetSetCount = workingTargets.length
 
   const loggedSets = useLiveQuery(
-    () => getSetsForExerciseOnDate(exerciseId, date),
-    [exerciseId, date]
+    () => getSetsForExerciseOnDate(exerciseId, date, programExerciseId),
+    [exerciseId, date, programExerciseId]
   ) ?? { warmup: [], working: [] }
 
   const thisWeekSetCount = useLiveQuery(
@@ -95,12 +102,14 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
     isWarmup: true,
     targetReps: target,
     set: loggedSets.warmup[i] ?? null,
+    canLog: i === loggedSets.warmup.length,
   }))
   const workingRows: SetRow[] = workingTargets.map((target, i) => ({
     key: `working-${i}`,
     isWarmup: false,
     targetReps: target,
     set: loggedSets.working[i] ?? null,
+    canLog: i === loggedSets.working.length,
   }))
   const loggedExtras = loggedSets.working.slice(workingTargets.length)
   const extraRows: SetRow[] = loggedExtras.map((set, i) => ({
@@ -108,6 +117,7 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
     isWarmup: false,
     targetReps: set.reps,
     set,
+    canLog: true, // already logged — Update is always available regardless of canLog
   }))
   // `extraSlotCount` only ever grows (clicking "+ Add extra set" bumps it,
   // nothing decrements it), so how many *pending* (not-yet-logged) extra
@@ -121,6 +131,11 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
     isWarmup: false,
     targetReps: workingTargets[workingTargets.length - 1] ?? 0,
     set: null,
+    // Only the first pending row is ever the immediate next working-stream
+    // slot — the "+ Add extra set" gate (below) keeps more than one pending
+    // row from existing at once in practice, but this stays correct even if
+    // that ever changes.
+    canLog: workingTargets.length + extraRows.length + i === loggedSets.working.length,
   }))
 
   const rows = [...warmupRows, ...workingRows, ...extraRows, ...pendingRows]
@@ -196,7 +211,7 @@ function WeightRow({
   }, [row.set?.id])
 
   async function handleSave() {
-    if (isSubmitting) return
+    if (isSubmitting || (!row.set && !row.canLog)) return
     const weightLbs = Number(weight)
     const repsNum = Number(reps)
     if (!(weightLbs > 0) || !Number.isInteger(repsNum) || repsNum <= 0) return
@@ -232,7 +247,7 @@ function WeightRow({
       <input id={weightId} type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
       <label htmlFor={repsId}>Reps — {rowLabel}</label>
       <input id={repsId} type="number" value={reps} onChange={(e) => setReps(e.target.value)} />
-      <button type="button" onClick={handleSave} disabled={isSubmitting}>
+      <button type="button" onClick={handleSave} disabled={isSubmitting || (!row.set && !row.canLog)}>
         {row.set ? 'Update' : 'Log set'}
       </button>
       {prMessage && <p role="status">{prMessage}</p>}
@@ -316,7 +331,13 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
       {lastWeekValue !== undefined && <p>Last week: {lastWeekValue}</p>}
       {rows.map((row) => {
         const checked = row.index < loggedValues.length
-        const disabled = isSubmitting || (!checked && row.index !== loggedValues.length)
+        // Only the next open row can be checked, and only the most-recently-
+        // checked row can be unchecked — any other checked row is clickable
+        // in the DOM by default (its own handler just no-ops), which reads
+        // as an affordance it won't honor. Disable it explicitly instead.
+        const disabled =
+          isSubmitting ||
+          (checked ? row.index !== loggedValues.length - 1 : row.index !== loggedValues.length)
         const checkboxId = `set-${programExerciseId}-${row.index}`
         return (
           <div key={row.index}>
@@ -335,7 +356,10 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
           </div>
         )
       })}
-      {pendingExtraCount === 0 && (
+      {/* No working targets at all (e.g. no prescription for this week) means
+          there's no target value to log an extra row with — lastTarget would
+          fall back to 0, which the checkbox would then log verbatim. */}
+      {pendingExtraCount === 0 && lastTarget > 0 && (
         <button type="button" onClick={() => setExtraRowRequestCount((c) => c + 1)}>
           + Add extra set
         </button>
