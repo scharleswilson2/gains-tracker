@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { exportAllData, importAllData } from '../lib/exportImport'
 import { todayIso } from '../lib/dates'
+import './Settings.css'
 
 export function Settings() {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -45,14 +46,16 @@ export function Settings() {
   }
 
   return (
-    <div>
+    <div className="settings-screen">
       <h1>Settings</h1>
-      <button type="button" onClick={handleExport}>
-        Export
-      </button>
-      <button type="button" onClick={() => fileInputRef.current?.click()}>
-        Import
-      </button>
+      <div className="settings-actions">
+        <button type="button" className="btn btn-primary" onClick={handleExport}>
+          Export
+        </button>
+        <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
+          Import
+        </button>
+      </div>
       <input
         ref={fileInputRef}
         type="file"
@@ -60,7 +63,7 @@ export function Settings() {
         style={{ display: 'none' }}
         onChange={handleImportFile}
       />
-      {importError && <p>Import failed: {importError}</p>}
+      {importError && <p className="settings-error">Import failed: {importError}</p>}
     </div>
   )
 }
