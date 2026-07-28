@@ -17,6 +17,7 @@ import { flattenHistorySets, getWorkingSetHistory } from '../db/workouts'
 import { estimateOneRepMax } from '../lib/oneRepMax'
 import { detectPr } from '../lib/prDetection'
 import { popTimeStats, successRate } from '../db/catching'
+import './Progress.css'
 
 export function Progress() {
   const [selectedExerciseId, setSelectedExerciseId] = useState<number | null>(null)
@@ -105,14 +106,15 @@ export function Progress() {
   }
 
   return (
-    <div>
+    <div className="progress-screen">
       <h1>Progress</h1>
 
-      <section>
+      <section className="progress-section">
         <h2>Lift Progress</h2>
         <label htmlFor="exercise-select">Select exercise</label>
         <select
           id="exercise-select"
+          className="field"
           onChange={(e) => setSelectedExerciseId(Number(e.target.value) || null)}
           defaultValue=""
         >
@@ -128,37 +130,45 @@ export function Progress() {
 
         {selectedExerciseId && (
           <>
-            <div>
-              <button type="button" onClick={() => setMetric('weight')}>
+            <div className="progress-metric-toggle">
+              <button
+                type="button"
+                className={`pill${metric === 'weight' ? ' pill-selected' : ''}`}
+                onClick={() => setMetric('weight')}
+              >
                 Top Weight
               </button>
-              <button type="button" onClick={() => setMetric('estimated1rm')}>
+              <button
+                type="button"
+                className={`pill${metric === 'estimated1rm' ? ' pill-selected' : ''}`}
+                onClick={() => setMetric('estimated1rm')}
+              >
                 Est. 1RM
               </button>
             </div>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+                <YAxis stroke="var(--color-text-muted)" />
                 <Tooltip />
-                <Line type="monotone" dataKey={metric} stroke="#2563eb" />
+                <Line type="monotone" dataKey={metric} stroke="var(--color-accent)" />
               </LineChart>
             </ResponsiveContainer>
 
             <h3>Volume</h3>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+                <YAxis stroke="var(--color-text-muted)" />
                 <Tooltip />
-                <Bar dataKey="volume" fill="#16a34a" />
+                <Bar dataKey="volume" fill="var(--color-accent)" />
               </BarChart>
             </ResponsiveContainer>
 
             <h3>PRs</h3>
-            <ul>
+            <ul className="progress-list">
               {prSets.map((pr, i) => (
                 <li key={i}>
                   {pr.date}: {pr.weightLbs} x {pr.reps}
@@ -167,7 +177,7 @@ export function Progress() {
             </ul>
 
             <h3>Sessions</h3>
-            <ul>
+            <ul className="progress-list">
               {history.map((h) => {
                 const topSet = h.sets.reduce(
                   (best, s) => (s.weightLbs > (best?.weightLbs ?? 0) ? s : best),
@@ -186,30 +196,30 @@ export function Progress() {
         )}
       </section>
 
-      <section>
+      <section className="progress-section">
         <h2>Pop Time</h2>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={popTimeChartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+            <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+            <YAxis stroke="var(--color-text-muted)" />
             <Tooltip />
-            <Line type="monotone" dataKey="best" stroke="#dc2626" />
-            <Line type="monotone" dataKey="average" stroke="#f97316" />
+            <Line type="monotone" dataKey="best" stroke="var(--color-accent)" />
+            <Line type="monotone" dataKey="average" stroke="var(--color-chart-secondary)" />
           </LineChart>
         </ResponsiveContainer>
       </section>
 
-      <section>
+      <section className="progress-section">
         <h2>Blocking / Framing Success Rate</h2>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={drillChartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+            <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+            <YAxis stroke="var(--color-text-muted)" />
             <Tooltip />
-            <Bar dataKey="blockingRate" fill="#2563eb" />
-            <Bar dataKey="framingRate" fill="#9333ea" />
+            <Bar dataKey="blockingRate" fill="var(--color-accent)" />
+            <Bar dataKey="framingRate" fill="var(--color-chart-secondary)" />
           </BarChart>
         </ResponsiveContainer>
       </section>
