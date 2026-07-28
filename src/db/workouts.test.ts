@@ -9,8 +9,10 @@ import {
   getLastWeekWeightResult,
   getOrCreateExerciseEntry,
   getOrCreateSessionForDate,
+  getSetsForExerciseOnDate,
   getWorkingSetCountForSlotWeek,
   getWorkingSetHistory,
+  updateSet,
   workingSetsOnly,
 } from './workouts'
 
@@ -297,5 +299,55 @@ describe('getWorkingSetCountForSlotWeek', () => {
     const exerciseId = await addExercise('Test Zero Set Count')
     const count = await getWorkingSetCountForSlotWeek(exerciseId, 999, 1)
     expect(count).toBe(0)
+  })
+})
+
+describe('getSetsForExerciseOnDate', () => {
+  it('splits a date\'s sets into warmup and working, in insertion order', async () => {
+    const exerciseId = await addExercise('Test Row Split')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId)
+    await addSet(entry, 45, 5, true)
+    await addSet(entry, 135, 5)
+    await addSet(entry, 145, 3)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27')
+    expect(result.warmup).toHaveLength(1)
+    expect(result.warmup[0].weightLbs).toBe(45)
+    expect(result.working.map((s) => s.weightLbs)).toEqual([135, 145])
+  })
+
+  it('returns empty lists when nothing was logged that date', async () => {
+    const exerciseId = await addExercise('Test No Sets That Date')
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27')
+    expect(result).toEqual({ warmup: [], working: [] })
+  })
+
+  it('only returns sets from the requested date, not other dates', async () => {
+    const exerciseId = await addExercise('Test Date Scoped Sets')
+    const session1 = await getOrCreateSessionForDate('2026-07-20')
+    const entry1 = await getOrCreateExerciseEntry(session1, exerciseId)
+    await addSet(entry1, 100, 5)
+    const session2 = await getOrCreateSessionForDate('2026-07-27')
+    const entry2 = await getOrCreateExerciseEntry(session2, exerciseId)
+    await addSet(entry2, 105, 5)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27')
+    expect(result.working.map((s) => s.weightLbs)).toEqual([105])
+  })
+})
+
+describe('updateSet', () => {
+  it('updates weightLbs and reps on an existing set in place', async () => {
+    const exerciseId = await addExercise('Test Update Set')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    const entry = await getOrCreateExerciseEntry(session, exerciseId)
+    const setId = await addSet(entry, 135, 5)
+
+    await updateSet(setId, { weightLbs: 140, reps: 4 })
+
+    const updated = await db.sets.get(setId)
+    expect(updated?.weightLbs).toBe(140)
+    expect(updated?.reps).toBe(4)
   })
 })

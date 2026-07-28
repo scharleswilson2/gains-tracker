@@ -142,3 +142,33 @@ export async function getWorkingSetCountForSlotWeek(
   }
   return count
 }
+
+export interface SetsForDate {
+  warmup: SetRecord[]
+  working: SetRecord[]
+}
+
+/**
+ * Sets logged for one exercise on one date, split by `isWarmup`, in
+ * insertion order — row *i* of the fixed-row set-entry UI maps to element
+ * *i* of the matching list. Relies on the same ascending-`id`-equals-
+ * insertion-order assumption `flattenHistorySets` already depends on.
+ */
+export async function getSetsForExerciseOnDate(
+  exerciseId: number,
+  date: string
+): Promise<SetsForDate> {
+  const history = await getExerciseHistory(exerciseId)
+  const sets = history.find((h) => h.date === date)?.sets ?? []
+  return {
+    warmup: sets.filter((s) => s.isWarmup === true),
+    working: sets.filter((s) => s.isWarmup !== true),
+  }
+}
+
+export async function updateSet(
+  setId: number,
+  changes: { weightLbs: number; reps: number }
+): Promise<void> {
+  await db.sets.update(setId, changes)
+}
