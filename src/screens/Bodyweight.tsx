@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { addBodyweightEntry, listBodyweightEntries } from '../db/bodyweight'
 import { todayIso } from '../lib/dates'
+import './Bodyweight.css'
 
 export function Bodyweight() {
   const [bodyweightInput, setBodyweightInput] = useState('')
@@ -24,33 +25,36 @@ export function Bodyweight() {
   }
 
   return (
-    <div>
+    <div className="bodyweight-screen">
       <h1>Bodyweight</h1>
-      <label htmlFor="bodyweight-input">Bodyweight (lbs)</label>
-      <input
-        id="bodyweight-input"
-        type="number"
-        min="0"
-        value={bodyweightInput}
-        onChange={(e) => setBodyweightInput(e.target.value)}
-      />
-      <button type="button" onClick={logBodyweight}>
-        Log Bodyweight
-      </button>
+      <div className="bodyweight-entry">
+        <label htmlFor="bodyweight-input">Bodyweight (lbs)</label>
+        <input
+          id="bodyweight-input"
+          className="field"
+          type="number"
+          min="0"
+          value={bodyweightInput}
+          onChange={(e) => setBodyweightInput(e.target.value)}
+        />
+        <button type="button" className="btn btn-primary" onClick={logBodyweight}>
+          Log Bodyweight
+        </button>
+      </div>
       {bodyweightEntries.length === 0 ? (
-        <p>No entries yet</p>
+        <p className="bodyweight-empty">No entries yet</p>
       ) : (
         <>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={bodyweightEntries}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis domain={['dataMin - 5', 'dataMax + 5']} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis dataKey="date" stroke="var(--color-text-muted)" />
+              <YAxis domain={['dataMin - 5', 'dataMax + 5']} stroke="var(--color-text-muted)" />
               <Tooltip />
-              <Line type="monotone" dataKey="weightLbs" stroke="#0891b2" />
+              <Line type="monotone" dataKey="weightLbs" stroke="var(--color-accent)" />
             </LineChart>
           </ResponsiveContainer>
-          <ul>
+          <ul className="bodyweight-list">
             {bodyweightEntries.map((b) => (
               <li key={b.id}>
                 {b.date}: {b.weightLbs}
