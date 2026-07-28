@@ -154,22 +154,29 @@ export interface SetsForDate {
  * *i* of the matching list. Relies on the same ascending-`id`-equals-
  * insertion-order assumption `flattenHistorySets` already depends on.
  *
- * When `programExerciseId` is given, only returns sets whose exercise
- * entry is tagged with that same slot (or a different one) — a free-form
- * log of the same exercise on the same day shares the underlying entry
- * (`getOrCreateExerciseEntry` matches on session+exercise only), so
- * without this an ad-hoc set could silently fill a prescribed row.
+ * When `programExerciseId` is given, entries tagged with a *different*
+ * slot (or left untagged so far) are treated as having nothing logged —
+ * a free-form log of the same exercise on the same day shares the
+ * underlying entry (`getOrCreateExerciseEntry` matches on session+exercise
+ * only), so without this an ad-hoc set could silently fill a prescribed
+ * row. Passing no `programExerciseId` (or `undefined`) skips this check
+ * entirely and returns everything on the entry, tagged or not.
  *
- * This is entry-level, not set-level, scoping, so it only discriminates
- * while the entry is untagged or tagged to a *different* slot — i.e. it
- * closes the free-form-logged-first ordering (the entry stays untagged,
- * so a differently-slotted or `undefined`-scoped read correctly sees
- * nothing). It does NOT close the more common prescribed-logged-first
- * ordering: once a slot's own log tags the entry, any later free-form log
- * of that same exercise reuses (and doesn't retag) the entry, so it still
- * shows up as if it were one of the slot's own rows. Fixing that needs
- * `programExerciseId` on `SetRecord` itself (per-set, not per-entry,
- * attribution) — out of scope for this phase.
+ * This is entry-level, not set-level, scoping, and it only ever suppresses
+ * — it never separates sets that already share one tagged entry. Concretely:
+ * if a free-form log happens *before* this slot has logged anything, its
+ * read of `programExerciseId` sees nothing (correct, but only until the
+ * slot's own first log backfills the tag onto that same entry — the
+ * backfill in `getOrCreateExerciseEntry` never retags an already-tagged
+ * entry, but does adopt an untagged one). Once the entry is tagged to this
+ * slot — by that backfill, or because the slot logged first, which is the
+ * more common ordering since prescribed rows render above the free-form
+ * section — every set already on the entry, including an earlier or later
+ * free-form one, is indistinguishable from the slot's own and shows up in
+ * its rows. Only per-set attribution (`programExerciseId` on `SetRecord`
+ * itself, not just on the entry) would close that — out of scope here; see
+ * `workouts.test.ts`'s "KNOWN LIMITATION" test for the exact behavior this
+ * leaves in place.
  */
 export async function getSetsForExerciseOnDate(
   exerciseId: number,

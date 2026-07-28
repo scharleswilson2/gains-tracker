@@ -366,6 +366,18 @@ describe('getSetsForExerciseOnDate', () => {
     expect(result).toEqual({ warmup: [], working: [] })
   })
 
+  it('with a slot-scoped read against a still-untagged entry, returns empty rather than a free-form set logged first', async () => {
+    const exerciseId = await addExercise('Test Free Form First Protected')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+    // A free-form log with no slot tag — getOrCreateExerciseEntry leaves
+    // programExerciseId undefined until some slot's own log backfills it.
+    const entry = await getOrCreateExerciseEntry(session, exerciseId)
+    await addSet(entry, 95, 8)
+
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27', 42)
+    expect(result).toEqual({ warmup: [], working: [] })
+  })
+
   it('KNOWN LIMITATION: a free-form log after the slot has already tagged the entry still shows up in that slot\'s rows', async () => {
     const exerciseId = await addExercise('Test Prescribed First Then Free Form')
     const session = await getOrCreateSessionForDate('2026-07-27')
@@ -375,11 +387,15 @@ describe('getSetsForExerciseOnDate', () => {
     const entry = await getOrCreateExerciseEntry(session, exerciseId, 42, 1)
     await addSet(entry, 135, 5) // the slot's own Set 1
 
-    // A later free-form log of the same exercise reuses the same
-    // (session, exercise) entry — getOrCreateExerciseEntry only backfills
-    // an *untagged* entry's programExerciseId, it never retags an
-    // already-tagged one — so this ad-hoc set lands on the same entry too.
-    await addSet(entry, 95, 8) // the free-form set
+    // A later free-form log of the same exercise goes through the exact
+    // same lookup a real free-form log would use (no tag args) — proving
+    // it resolves to the *same* entry, not asserting that as a given, so
+    // this test would fail loudly (rather than silently going stale) if
+    // getOrCreateExerciseEntry ever stopped reusing an already-tagged
+    // entry for an untagged caller.
+    const freeFormEntryId = await getOrCreateExerciseEntry(session, exerciseId)
+    expect(freeFormEntryId).toBe(entry)
+    await addSet(freeFormEntryId, 95, 8) // the free-form set
 
     // Scoping by programExerciseId is entry-level, not set-level, so it
     // can't tell these two sets apart: the free-form set silently

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProgramSlotCard } from './ProgramSlotCard'
 import { addExercise } from '../db/exercises'
@@ -216,10 +216,9 @@ describe('ProgramSlotCard', () => {
     const otherSlotEntry = await getOrCreateExerciseEntry(priorSession, exerciseId, 998, 1)
     await addSet(otherSlotEntry, 999, 9)
 
-    // Also seed a genuine "last week" result for *this* slot (id 14) so the
-    // test has a reliable signal that WeightSlotForm's live queries have
-    // actually resolved at least once before asserting the negative case —
-    // without this, "Set 1 is empty" would trivially pass on the very
+    // Also seed a genuine "last week" result for *this* slot (id 14) as one
+    // signal that WeightSlotForm's live queries have started resolving —
+    // without any signal, "Set 1 is empty" would trivially pass on the very
     // first synchronous render, before the (possibly buggy) query for the
     // other slot's set has had a chance to come back and populate it.
     const lastWeekSession = await getOrCreateSessionForDate('2026-06-29')
@@ -234,6 +233,16 @@ describe('ProgramSlotCard', () => {
     render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={2} />)
 
     expect(await screen.findByText(/Last week: 205 lbs x 5/)).toBeInTheDocument()
+
+    // "Last week" resolving only proves getLastWeekWeightResult settled,
+    // not getSetsForExerciseOnDate — they're independent live queries with
+    // no ordering guarantee between them. Explicitly flush a couple more
+    // macrotask ticks so this assertion doesn't depend on the two queries
+    // happening to need the same number of round-trips today.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
 
     const weightInput = screen.getByLabelText(/weight \(lbs\) — set 1/i)
     expect(weightInput).toHaveValue(null)
