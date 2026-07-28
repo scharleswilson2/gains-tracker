@@ -52,6 +52,16 @@ export const EXERCISE_DESCRIPTIONS: Record<string, string> = {
   'Hammer Curl': 'Curl a dumbbell with a neutral (palms-facing-each-other) grip, emphasizing the brachialis and forearm.',
   'Reverse Curl': 'Curl a barbell or dumbbells with an overhand (palms-down) grip, emphasizing the forearms and brachialis.',
   'Iso Bicep Hold': 'Hold a dumbbell or barbell at a fixed elbow angle (e.g. 90 degrees) for time. Trains isometric bicep strength.',
+  'Depth Drop w/ Rebound Jump': 'Step off a box, land on both feet absorbing the impact, then immediately explode into a maximal vertical jump. Trains reactive strength and the transition from landing to explosive power.',
+  'Hands on Hips Vertical Jump': 'With hands held on the hips (no arm swing), jump straight up for maximum height using only the legs and hips. Isolates lower-body power output without upper-body assistance.',
+  'Hip CARS': 'Controlled Articular Rotations for the hip: standing on one leg, slowly move the other hip through its full range of motion (flexion, abduction, rotation, extension) under control. Trains hip mobility and joint control.',
+  'Lateral HK Sprints': 'High-knee sprint performed moving laterally (side to side) rather than straight ahead, emphasizing quick lateral ground contact and hip drive.',
+  'Sled push march': 'Push a weighted sled forward using a deliberate high-knee marching stride rather than a running push, emphasizing drive and posture through each step.',
+  'Step Back Rotational MB Throw': 'Step backward into a rotational medicine ball throw, generating power from a lengthened stance through hip and torso rotation.',
+  'Side Plank w/ Abduction': 'From a side plank position, raise and lower the top leg (hip abduction) while maintaining a stable trunk. Trains the obliques and hip abductors together.',
+  '20 yard flys': 'A flying sprint: build up speed before entering a 20-yard timed zone at maximum velocity, training top-end sprint speed.',
+  'MB Chest Pass': 'Holding a medicine ball at the chest, explosively push/throw it forward like a basketball chest pass, training upper-body and full-body power transfer.',
+  'Bear Crawl Forward Walk': 'In a bear-crawl (hands and feet, hips low) position, crawl forward for distance while keeping the hips level and core braced. Trains core stability and coordination under load.',
 }
 
 export async function seedExerciseGlossary(): Promise<void> {
