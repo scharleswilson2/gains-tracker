@@ -9,6 +9,7 @@ import { SlotHeader } from '../components/SlotHeader'
 import { DayNavigator } from '../components/DayNavigator'
 import { logWeightSet } from '../lib/logWeightSet'
 import { todayIso } from '../lib/dates'
+import './LogLift.css'
 
 export function LogLift() {
   const today = todayIso()
@@ -101,17 +102,17 @@ export function LogLift() {
   }
 
   return (
-    <div>
+    <div className="log-lift">
       <h1>Log</h1>
 
       <DayNavigator days={allDays} currentIndex={currentIndex} onNavigate={setDayIndex} />
 
       {activeEntry && (
         <section>
-          {activeEntry.day.note && <p>{activeEntry.day.note}</p>}
+          {activeEntry.day.note && <p className="log-lift-day-note">{activeEntry.day.note}</p>}
           {groupSlotsByBlock(slots).map(([blockLabel, blockSlots]) => (
-            <div key={blockLabel}>
-              <h3>{blockLabel}</h3>
+            <div key={blockLabel} className="log-lift-block">
+              <h3 className="log-lift-block-label">{blockLabel}</h3>
               {blockSlots.map((slot) =>
                 isLiveWeek ? (
                   <ProgramSlotCard
@@ -129,76 +130,94 @@ export function LogLift() {
         </section>
       )}
 
-      <hr />
+      <hr className="log-lift-divider" />
       <h2>Log something else</h2>
 
-      <label htmlFor="exercise-input">Exercise</label>
-      <input
-        id="exercise-input"
-        value={selectedExerciseName || query}
-        onChange={(e) => {
-          setQuery(e.target.value)
-          setSelectedExerciseName('')
-          setSelectedExerciseId(null)
-        }}
-        placeholder="Type to search or add an exercise"
-      />
-      <ul>
-        {matches.map((m) => (
-          <li key={m.id}>
-            <button type="button" onClick={() => selectExercise(m.name)}>
-              {m.name}
-            </button>
-          </li>
-        ))}
-        {query.length > 0 && !matches.some((m) => m.name.toLowerCase() === query.toLowerCase()) && (
-          <li>
-            <button type="button" onClick={() => selectExercise(query)}>
-              Add "{query}"
-            </button>
-          </li>
-        )}
-      </ul>
+      <div className="log-lift-freeform-search">
+        <label htmlFor="exercise-input">Exercise</label>
+        <input
+          id="exercise-input"
+          className="field"
+          value={selectedExerciseName || query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setSelectedExerciseName('')
+            setSelectedExerciseId(null)
+          }}
+          placeholder="Type to search or add an exercise"
+        />
+        <ul className="log-lift-matches">
+          {matches.map((m) => (
+            <li key={m.id}>
+              <button type="button" className="btn" onClick={() => selectExercise(m.name)}>
+                {m.name}
+              </button>
+            </li>
+          ))}
+          {query.length > 0 && !matches.some((m) => m.name.toLowerCase() === query.toLowerCase()) && (
+            <li>
+              <button type="button" className="btn" onClick={() => selectExercise(query)}>
+                Add "{query}"
+              </button>
+            </li>
+          )}
+        </ul>
+      </div>
 
       {selectedExerciseId && (
-        <div>
+        <div className="log-lift-freeform-entry">
           <h2>{selectedExerciseName}</h2>
 
           {lastSets && lastSets.length > 0 && (
-            <p>Last time: {lastSets.map((s) => `${s.weightLbs} x ${s.reps}`).join(', ')}</p>
+            <p className="log-lift-last-time">
+              Last time: {lastSets.map((s) => `${s.weightLbs} x ${s.reps}`).join(', ')}
+            </p>
           )}
 
-          <label htmlFor="bodyweight-toggle">No weight (bodyweight)</label>
-          <input
-            id="bodyweight-toggle"
-            type="checkbox"
-            checked={isBodyweight}
-            onChange={(e) => setIsBodyweight(e.target.checked)}
-          />
+          <div className="log-lift-bodyweight-toggle">
+            <label htmlFor="bodyweight-toggle">No weight (bodyweight)</label>
+            <input
+              id="bodyweight-toggle"
+              type="checkbox"
+              checked={isBodyweight}
+              onChange={(e) => setIsBodyweight(e.target.checked)}
+            />
+          </div>
 
           {!isBodyweight && (
-            <div>
+            <div className="log-lift-field">
               <label htmlFor="weight-input">Weight (lbs)</label>
               <input
                 id="weight-input"
+                className="field"
                 type="number"
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
               />
             </div>
           )}
-          <div>
+          <div className="log-lift-field">
             <label htmlFor="reps-input">Reps</label>
-            <input id="reps-input" type="number" value={reps} onChange={(e) => setReps(e.target.value)} />
+            <input
+              id="reps-input"
+              className="field"
+              type="number"
+              value={reps}
+              onChange={(e) => setReps(e.target.value)}
+            />
           </div>
-          <button type="button" onClick={handleAddSet} disabled={isSubmitting}>
+          <button type="button" className="btn btn-primary" onClick={handleAddSet} disabled={isSubmitting}>
             Add Set
           </button>
 
-          {prMessage && <p role="status">{prMessage}</p>}
+          {prMessage && (
+            <p role="status" className="pr-badge">
+              ★ {prMessage}
+            </p>
+          )}
 
           <h3>Today's sets</h3>
-          <ul>
+          <ul className="log-lift-today-sets">
             {(todaySets ?? []).map((s, i) => (
               <li key={i}>
                 {s.weightLbs} x {s.reps}
