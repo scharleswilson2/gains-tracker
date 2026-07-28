@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProgramSlotCard } from './ProgramSlotCard'
 import { addExercise } from '../db/exercises'
@@ -183,6 +183,29 @@ describe('ProgramSlotCard', () => {
     await user.click(row1)
 
     await waitFor(() => expect(row1).toBeChecked())
+    expect(screen.getByLabelText(/set 2 \(target 3\)/i)).not.toBeChecked()
+  })
+
+  it('does not double-log when two change events land on the same row before the first write resolves', async () => {
+    const exerciseId = await addExercise('Test Rapid Double Check')
+    const slot = makeSlot(
+      { exerciseId, measureType: 'bodyweight_reps' },
+      { id: 13, programExerciseId: 13, weekNumber: 1, rir: null, warmupTargets: [], workingTargets: [3, 3], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
+
+    const row1 = screen.getByLabelText(/set 1 \(target 3\)/i)
+    // fireEvent (unlike userEvent) doesn't await between events, so both
+    // change events fire before the first appendProgramLogValue write (and
+    // the live-query refresh it triggers) resolves — reproducing the race
+    // the isSubmitting guard closes.
+    fireEvent.click(row1)
+    fireEvent.click(row1)
+
+    await waitFor(() => expect(row1).toBeChecked())
+    // Only row 1 should be checked — a double-fire must not silently log a
+    // second set and check row 2 on the user's behalf.
     expect(screen.getByLabelText(/set 2 \(target 3\)/i)).not.toBeChecked()
   })
 

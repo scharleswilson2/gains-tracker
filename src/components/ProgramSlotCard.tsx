@@ -242,6 +242,7 @@ function WeightRow({
 
 function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const [extraRowRequestCount, setExtraRowRequestCount] = useState(0)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const programExerciseId = slot.programExercise.id!
   const workingTargets = slot.prescription?.workingTargets ?? []
 
@@ -276,14 +277,30 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
   const extraRowCount = Math.max(extraRowRequestCount, loggedExtraCount)
   const pendingExtraCount = Math.max(0, extraRowRequestCount - loggedExtraCount)
 
+  // `isSubmitting` guards against a rapid double-fire on the same checkbox
+  // (two change events landing before the first write's live-query refresh
+  // updates `loggedValues`) — without it, both events see the same stale
+  // `loggedValues.length` and pass the index guard, silently double-logging
+  // a set and checking the row after it. Mirrors WeightRow's identical
+  // `isSubmitting` guard on its save button in this same file.
   async function handleCheck(rowIndex: number, targetValue: number) {
-    if (rowIndex !== loggedValues.length) return
-    await appendProgramLogValue(programExerciseId, date, weekNumber, targetValue)
+    if (isSubmitting || rowIndex !== loggedValues.length) return
+    setIsSubmitting(true)
+    try {
+      await appendProgramLogValue(programExerciseId, date, weekNumber, targetValue)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   async function handleUncheck(rowIndex: number) {
-    if (rowIndex !== loggedValues.length - 1) return
-    await removeLastProgramLogValue(programExerciseId, date, weekNumber)
+    if (isSubmitting || rowIndex !== loggedValues.length - 1) return
+    setIsSubmitting(true)
+    try {
+      await removeLastProgramLogValue(programExerciseId, date, weekNumber)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const rows = [
@@ -299,7 +316,7 @@ function SimpleValueSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
       {lastWeekValue !== undefined && <p>Last week: {lastWeekValue}</p>}
       {rows.map((row) => {
         const checked = row.index < loggedValues.length
-        const disabled = !checked && row.index !== loggedValues.length
+        const disabled = isSubmitting || (!checked && row.index !== loggedValues.length)
         const checkboxId = `set-${programExerciseId}-${row.index}`
         return (
           <div key={row.index}>
