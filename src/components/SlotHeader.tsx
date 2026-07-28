@@ -1,5 +1,6 @@
 import type { ResolvedSlot } from '../db/programExercises'
 import { ExerciseInfo } from './ExerciseInfo'
+import './SlotHeader.css'
 
 function targetSummary(slot: ResolvedSlot): string {
   const { prescription } = slot
@@ -23,11 +24,13 @@ export function SlotHeader({ slot }: { slot: ResolvedSlot }) {
   const { programExercise, prescription } = slot
 
   return (
-    <div>
+    <div className="slot-header">
       <ExerciseInfo name={slot.exerciseName} />
-      {programExercise.tempo && <span> Tempo: {programExercise.tempo}</span>}
-      {prescription?.rir && <span> RIR: {prescription.rir}</span>}
-      <p>
+      <div className="slot-header-meta">
+        {programExercise.tempo && <span>Tempo: {programExercise.tempo}</span>}
+        {prescription?.rir && <span>RIR: {prescription.rir}</span>}
+      </div>
+      <p className="slot-header-targets">
         {targetSummary(slot)}
         {programExercise.eachSide && <span> (each side)</span>}
       </p>

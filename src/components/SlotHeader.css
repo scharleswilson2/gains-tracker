@@ -1,0 +1,16 @@
+.slot-header {
+  margin-bottom: var(--space-2);
+}
+
+.slot-header-meta {
+  display: flex;
+  gap: var(--space-3);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.slot-header-targets {
+  margin: var(--space-1) 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}

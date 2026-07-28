@@ -1,0 +1,16 @@
+.exercise-info-name {
+  background: none;
+  border: none;
+  padding: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.exercise-info-description {
+  margin: var(--space-1) 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
