@@ -356,19 +356,38 @@ describe('getSetsForExerciseOnDate', () => {
     expect(result.working.map((s) => s.weightLbs)).toEqual([135])
   })
 
-  it('with a non-matching programExerciseId, returns empty rather than another slot\'s (or free-form\'s) sets', async () => {
+  it('with a non-matching programExerciseId, returns empty rather than a different slot\'s sets', async () => {
     const exerciseId = await addExercise('Test Cross Slot Contamination')
     const session = await getOrCreateSessionForDate('2026-07-27')
-    // Simulates a free-form log (no programExerciseId) of the same exercise
-    // also prescribed today under slot 42 — both share one exercise entry
-    // (getOrCreateExerciseEntry matches on session+exercise only), so
-    // without scoping, slot 42's rows would show this free-form set as if
-    // it were one of its own prescribed sets.
-    const entry = await getOrCreateExerciseEntry(session, exerciseId)
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 7, 1)
     await addSet(entry, 135, 5)
 
     const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27', 42)
     expect(result).toEqual({ warmup: [], working: [] })
+  })
+
+  it('KNOWN LIMITATION: a free-form log after the slot has already tagged the entry still shows up in that slot\'s rows', async () => {
+    const exerciseId = await addExercise('Test Prescribed First Then Free Form')
+    const session = await getOrCreateSessionForDate('2026-07-27')
+
+    // The prescribed slot logs first — the common real-world ordering,
+    // since prescribed rows render above the free-form section on screen.
+    const entry = await getOrCreateExerciseEntry(session, exerciseId, 42, 1)
+    await addSet(entry, 135, 5) // the slot's own Set 1
+
+    // A later free-form log of the same exercise reuses the same
+    // (session, exercise) entry — getOrCreateExerciseEntry only backfills
+    // an *untagged* entry's programExerciseId, it never retags an
+    // already-tagged one — so this ad-hoc set lands on the same entry too.
+    await addSet(entry, 95, 8) // the free-form set
+
+    // Scoping by programExerciseId is entry-level, not set-level, so it
+    // can't tell these two sets apart: the free-form set silently
+    // appears as slot 42's "Set 2". This is the documented residual gap
+    // in getSetsForExerciseOnDate — this test exists to keep it visible,
+    // not to assert it's acceptable.
+    const result = await getSetsForExerciseOnDate(exerciseId, '2026-07-27', 42)
+    expect(result.working.map((s) => s.weightLbs)).toEqual([135, 95])
   })
 })
 

@@ -207,6 +207,40 @@ describe('ProgramSlotCard', () => {
     expect(screen.getByLabelText(/weight \(lbs\) — set 1/i)).toHaveValue(90)
   })
 
+  it('does not show a different slot\'s logged set as if it were this slot\'s Set 1', async () => {
+    const exerciseId = await addExercise('Test Slot Scoped Rows')
+    const priorSession = await getOrCreateSessionForDate('2026-07-06')
+    // A different program slot (id 998) logged this same exercise on the
+    // same day — without programExerciseId scoping in the underlying
+    // query, this slot's Set 1 row would incorrectly show this set.
+    const otherSlotEntry = await getOrCreateExerciseEntry(priorSession, exerciseId, 998, 1)
+    await addSet(otherSlotEntry, 999, 9)
+
+    // Also seed a genuine "last week" result for *this* slot (id 14) so the
+    // test has a reliable signal that WeightSlotForm's live queries have
+    // actually resolved at least once before asserting the negative case —
+    // without this, "Set 1 is empty" would trivially pass on the very
+    // first synchronous render, before the (possibly buggy) query for the
+    // other slot's set has had a chance to come back and populate it.
+    const lastWeekSession = await getOrCreateSessionForDate('2026-06-29')
+    const lastWeekEntry = await getOrCreateExerciseEntry(lastWeekSession, exerciseId, 14, 1)
+    await addSet(lastWeekEntry, 205, 5)
+
+    const slot = makeSlot(
+      { id: 14, exerciseId, measureType: 'weight' },
+      { id: 9, programExerciseId: 14, weekNumber: 2, rir: 'M', warmupTargets: [], workingTargets: [3], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={2} />)
+
+    expect(await screen.findByText(/Last week: 205 lbs x 5/)).toBeInTheDocument()
+
+    const weightInput = screen.getByLabelText(/weight \(lbs\) — set 1/i)
+    expect(weightInput).toHaveValue(null)
+    expect(screen.getByRole('button', { name: /log set/i })).toBeEnabled()
+    expect(screen.queryByText('999')).not.toBeInTheDocument()
+  })
+
   it('checking the first row logs its prescribed target value', async () => {
     const user = userEvent.setup()
     const exerciseId = await addExercise('Test Depth Drop')

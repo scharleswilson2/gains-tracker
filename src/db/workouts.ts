@@ -155,15 +155,21 @@ export interface SetsForDate {
  * insertion-order assumption `flattenHistorySets` already depends on.
  *
  * When `programExerciseId` is given, only returns sets whose exercise
- * entry is tagged with that same slot — a free-form log of the same
- * exercise on the same day shares the underlying entry (`getOrCreate
- * ExerciseEntry` matches on session+exercise only), so without this an
- * ad-hoc set logged first would silently fill a prescribed row. This
- * covers the common ordering (prescribed slot logged before any free-form
- * log of the same exercise that day); if free-form logging happens first
- * and the slot backfills the tag afterward, that earlier free-form set
- * still ends up attributed to the slot — full per-set attribution would
- * need `programExerciseId` on `SetRecord` itself, out of scope here.
+ * entry is tagged with that same slot (or a different one) — a free-form
+ * log of the same exercise on the same day shares the underlying entry
+ * (`getOrCreateExerciseEntry` matches on session+exercise only), so
+ * without this an ad-hoc set could silently fill a prescribed row.
+ *
+ * This is entry-level, not set-level, scoping, so it only discriminates
+ * while the entry is untagged or tagged to a *different* slot — i.e. it
+ * closes the free-form-logged-first ordering (the entry stays untagged,
+ * so a differently-slotted or `undefined`-scoped read correctly sees
+ * nothing). It does NOT close the more common prescribed-logged-first
+ * ordering: once a slot's own log tags the entry, any later free-form log
+ * of that same exercise reuses (and doesn't retag) the entry, so it still
+ * shows up as if it were one of the slot's own rows. Fixing that needs
+ * `programExerciseId` on `SetRecord` itself (per-set, not per-entry,
+ * attribution) — out of scope for this phase.
  */
 export async function getSetsForExerciseOnDate(
   exerciseId: number,
