@@ -144,7 +144,12 @@ function WeightSlotForm({ slot, date, weekNumber }: ProgramSlotCardProps) {
           />
         )
       })}
-      {pendingCount === 0 && (
+      {/* A row's set is attributed by insertion order (getSetsForExerciseOnDate's
+          contract), not by which row's button the user clicked — so an extra set
+          logged before the prescribed rows are done would land on an earlier,
+          untouched row instead of at the end. Gating this on the prescription
+          being complete keeps every new save unambiguously "the next row." */}
+      {pendingCount === 0 && loggedSets.working.length >= workingTargets.length && (
         <button type="button" onClick={() => setExtraSlotCount((c) => c + 1)}>
           + Add extra set
         </button>

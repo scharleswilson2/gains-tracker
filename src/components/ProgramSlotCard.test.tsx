@@ -111,10 +111,10 @@ describe('ProgramSlotCard', () => {
 
     render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
 
-    // A row's working-vs-extra classification is positional (the Nth
-    // chronologically-logged working set fills row N), so the prescribed
-    // row must be logged first — otherwise the "extra" set would itself
-    // become row 1 instead of landing beyond it.
+    // "+ Add extra set" is gated behind the prescribed rows being complete
+    // (see the next test), so the prescribed row must be logged first.
+    expect(screen.queryByRole('button', { name: /add extra set/i })).not.toBeInTheDocument()
+
     await user.type(screen.getByLabelText(/weight \(lbs\) — set 1/i), '90')
     await user.clear(screen.getByLabelText(/reps — set 1/i))
     await user.type(screen.getByLabelText(/reps — set 1/i), '3')
@@ -132,10 +132,41 @@ describe('ProgramSlotCard', () => {
     // The typed value is already 95 before the save round-trip completes
     // (it's just controlled input state), so that alone isn't a reliable
     // signal the save finished. Wait for "+ Add extra set" to reappear —
-    // it's hidden while `showExtraRow` is true and only comes back via the
-    // row's `onSaved` callback once the set has actually been persisted.
+    // `pendingCount` only drops back to 0 once the live query's `extraRows`
+    // actually reflects the newly-persisted set.
     await waitFor(() => expect(screen.getByRole('button', { name: /add extra set/i })).toBeInTheDocument())
     expect(screen.getByLabelText(/weight \(lbs\) — set 2/i)).toHaveValue(95)
+  })
+
+  it('hides "+ Add extra set" until every prescribed working row is logged', async () => {
+    const user = userEvent.setup()
+    const exerciseId = await addExercise('Test Gate Extra Set')
+    const slot = makeSlot(
+      { exerciseId, measureType: 'weight' },
+      { id: 12, programExerciseId: 12, weekNumber: 1, rir: 'M', warmupTargets: [], workingTargets: [3, 3], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
+
+    expect(screen.queryByRole('button', { name: /add extra set/i })).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 1/i), '90')
+    await user.clear(screen.getByLabelText(/reps — set 1/i))
+    await user.type(screen.getByLabelText(/reps — set 1/i), '3')
+    await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /update/i })).toHaveLength(1))
+
+    // One of two prescribed rows logged — still gated.
+    expect(screen.queryByRole('button', { name: /add extra set/i })).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/weight \(lbs\) — set 2/i), '90')
+    await user.clear(screen.getByLabelText(/reps — set 2/i))
+    await user.type(screen.getByLabelText(/reps — set 2/i), '3')
+    await user.click(screen.getByRole('button', { name: /log set/i }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /add extra set/i })).toBeInTheDocument()
+    )
   })
 
   it('logs a bodyweight_reps set via the simple numeric form', async () => {
