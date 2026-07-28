@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/schema'
+import './History.css'
 
 interface HistoryRow {
   date: string
@@ -56,11 +57,11 @@ export function History() {
   }, []) ?? []
 
   return (
-    <div>
+    <div className="history-screen">
       <h1>History</h1>
-      <ul>
+      <ul className="history-list">
         {rows.map((row) => (
-          <li key={row.key}>
+          <li key={row.key} className="history-row">
             {row.date} — {row.label}
           </li>
         ))}
