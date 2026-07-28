@@ -15,9 +15,6 @@ export default function App() {
         <header className="app-header">
           <span className="app-title">Gains Tracker</span>
           <div className="header-links">
-            <Link to="/bodyweight" aria-label="Bodyweight" className="bodyweight-link">
-              ⚖
-            </Link>
             <Link to="/settings" aria-label="Settings" className="settings-link">
               ⚙
             </Link>
