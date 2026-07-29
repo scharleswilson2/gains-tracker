@@ -3,8 +3,8 @@
   --color-surface: #fafafa;
   --color-border: #e5e5e5;
   --color-text: #111111;
-  --color-text-muted: #888888;
-  --color-accent: #16a34a;
+  --color-text-muted: #767676;
+  --color-accent: #15803d;
   --color-accent-contrast: #ffffff;
   --color-pr-bg: #fff7e6;
   --color-pr-text: #b45309;
@@ -47,7 +47,7 @@ body {
   border-radius: var(--radius-sm);
   background: var(--color-bg);
   color: var(--color-text);
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
 
 .btn {
