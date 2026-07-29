@@ -296,7 +296,7 @@ function WeightRow({
       </button>
       {prMessage && (
         <p role="status" className="pr-badge set-row-pr">
-          ★ {prMessage}
+          <span aria-hidden="true">★</span> {prMessage}
         </p>
       )}
     </div>

@@ -26,7 +26,7 @@ export function Bodyweight() {
 
   return (
     <div className="bodyweight-screen">
-      <h1>Bodyweight</h1>
+      <h1>Weight</h1>
       <div className="bodyweight-entry">
         <label htmlFor="bodyweight-input">Bodyweight (lbs)</label>
         <input

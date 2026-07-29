@@ -49,7 +49,7 @@ export function LogCatching() {
   if (sessionId === undefined) {
     return (
       <div>
-        <h1>Log Catching</h1>
+        <h1>Catching</h1>
         <p>Loading...</p>
       </div>
     )
@@ -101,7 +101,7 @@ export function LogCatching() {
 
   return (
     <div className="log-catching">
-      <h1>Log Catching</h1>
+      <h1>Catching</h1>
 
       <section className="log-catching-section">
         <h2>Pop Time</h2>

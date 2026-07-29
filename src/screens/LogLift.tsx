@@ -212,7 +212,7 @@ export function LogLift() {
 
           {prMessage && (
             <p role="status" className="pr-badge">
-              ★ {prMessage}
+              <span aria-hidden="true">★</span> {prMessage}
             </p>
           )}
 
