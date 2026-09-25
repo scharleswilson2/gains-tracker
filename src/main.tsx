@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { ensureJulyProgramSeeded } from './db/seedJulyProgram'
 import { ensureAugustProgramSeeded } from './db/seedAugustProgram'
+import { ensureSeptemberProgramSeeded } from './db/seedSeptemberProgram'
 import { seedExerciseGlossary } from './db/exerciseGlossary'
 
 function renderApp() {
@@ -21,6 +22,7 @@ function renderApp() {
 seedExerciseGlossary()
   .then(() => ensureJulyProgramSeeded())
   .then(() => ensureAugustProgramSeeded())
+  .then(() => ensureSeptemberProgramSeeded())
   .then(renderApp)
   .catch((error) => {
     console.error('Failed to seed program data:', error)

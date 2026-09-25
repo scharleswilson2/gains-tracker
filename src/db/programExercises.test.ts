@@ -132,6 +132,91 @@ describe('programExercises data layer', () => {
     expect(slots.map((s) => s.exerciseName)).toEqual(['Ex A', 'Ex B', 'Ex Null'])
   })
 
+  it('sorts by blockOrder ahead of alphabetical order when set', async () => {
+    const exerciseIdA = await db.exercises.add({ name: 'Ex Block A' })
+    const exerciseIdMedBalls = await db.exercises.add({ name: 'Ex Med Balls' })
+    const exerciseIdPlyos = await db.exercises.add({ name: 'Ex Plyos' })
+    const programId = await db.programs.add({
+      name: 'Test',
+      startDate: '2026-06-29',
+      endDate: '2026-07-24',
+    })
+    const dayId = await db.programDays.add({ programId, dayNumber: 1 })
+
+    // Inserted in alphabetical (wrong) order, so only an explicit blockOrder
+    // comparison — not insertion order or a stale sort — could produce the
+    // Plyos/Med Balls/A ordering asserted below.
+    await addProgramExercise({
+      dayId,
+      exerciseId: exerciseIdA,
+      blockLabel: 'A',
+      orderIndex: 0,
+      measureType: 'weight',
+      eachSide: false,
+      tempo: null,
+      blockOrder: 2,
+    })
+    await addProgramExercise({
+      dayId,
+      exerciseId: exerciseIdMedBalls,
+      blockLabel: 'Med Balls',
+      orderIndex: 0,
+      measureType: 'bodyweight_reps',
+      eachSide: false,
+      tempo: null,
+      blockOrder: 1,
+    })
+    await addProgramExercise({
+      dayId,
+      exerciseId: exerciseIdPlyos,
+      blockLabel: 'Plyos',
+      orderIndex: 0,
+      measureType: 'bodyweight_reps',
+      eachSide: false,
+      tempo: null,
+      blockOrder: 0,
+    })
+
+    const slots = await getDaySlots(dayId, 1)
+    expect(slots.map((s) => s.exerciseName)).toEqual(['Ex Plyos', 'Ex Med Balls', 'Ex Block A'])
+  })
+
+  it('sorts a block with no blockOrder after every block that has one', async () => {
+    const exerciseIdOrdered = await db.exercises.add({ name: 'Ex Ordered' })
+    const exerciseIdUnordered = await db.exercises.add({ name: 'Ex Unordered' })
+    const programId = await db.programs.add({
+      name: 'Test',
+      startDate: '2026-06-29',
+      endDate: '2026-07-24',
+    })
+    const dayId = await db.programDays.add({ programId, dayNumber: 1 })
+
+    // "Unordered"'s label alphabetizes before "Zzz Ordered" — without the
+    // Infinity fallback, alphabetical order alone would put it first.
+    await addProgramExercise({
+      dayId,
+      exerciseId: exerciseIdUnordered,
+      blockLabel: 'Unordered',
+      orderIndex: 0,
+      measureType: 'weight',
+      eachSide: false,
+      tempo: null,
+    })
+    await addProgramExercise({
+      dayId,
+      exerciseId: exerciseIdOrdered,
+      blockLabel: 'Zzz Ordered',
+      orderIndex: 0,
+      measureType: 'weight',
+      eachSide: false,
+      tempo: null,
+      blockOrder: 0,
+    })
+
+    const slots = await getDaySlots(dayId, 1)
+    expect(slots.map((s) => s.exerciseName)).toEqual(['Ex Ordered', 'Ex Unordered'])
+  })
+
   it('returns prescription: null when no prescription exists for the requested week', async () => {
     const exerciseId = await db.exercises.add({ name: 'Some Exercise' })
     const programId = await db.programs.add({

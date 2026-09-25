@@ -57,6 +57,22 @@ describe('programs data layer', () => {
     expect(active).toBeNull()
   })
 
+  it('resolves Saturday to day 6 when a ProgramDay is seeded for it', async () => {
+    const programId = await createProgram('Six Day Program', '2026-09-21', '2026-09-26')
+    await addProgramWeek(programId, 1, '2026-09-21', '2026-09-26')
+    await addProgramDay(programId, 6)
+    const active = await getActiveProgramDay('2026-09-26') // Saturday
+    expect(active?.day.dayNumber).toBe(6)
+  })
+
+  it('returns null for a Sunday even when the week range covers it', async () => {
+    const programId = await createProgram('Six Day Program', '2026-09-21', '2026-09-27')
+    await addProgramWeek(programId, 1, '2026-09-21', '2026-09-27')
+    await addProgramDay(programId, 6)
+    const active = await getActiveProgramDay('2026-09-27') // Sunday
+    expect(active).toBeNull()
+  })
+
   it('returns null for a date outside any program', async () => {
     await seedTestProgram()
     const active = await getActiveProgramDay('2025-01-01')

@@ -76,6 +76,32 @@ export async function appendProgramLogValue(
   })
 }
 
+/**
+ * Overwrites the value at `index` on the (programExerciseId, date) entry
+ * that has no `chosenCategory` — used to correct a previously logged
+ * bodyweight/time/distance row (e.g. the actual reps done differed from the
+ * prescribed target) without disturbing any other row in the same entry.
+ */
+export async function updateProgramLogValue(
+  programExerciseId: number,
+  date: string,
+  index: number,
+  value: number
+): Promise<void> {
+  return db.transaction('rw', db.programLogEntries, async () => {
+    const existing = await db.programLogEntries
+      .where('programExerciseId')
+      .equals(programExerciseId)
+      .and((e) => e.date === date && (e.chosenCategory ?? null) === null)
+      .first()
+    if (!existing || index < 0 || index >= existing.values.length) return
+
+    const nextValues = [...existing.values]
+    nextValues[index] = value
+    await db.programLogEntries.update(existing.id!, { values: nextValues })
+  })
+}
+
 export interface LogCategoryChoiceInput {
   programExerciseId: number
   date: string
@@ -187,39 +213,4 @@ export async function getLastWeekCategoryValue(
   category: string
 ): Promise<number | undefined> {
   return lastValueForMatchingEntry(programExerciseId, weekNumber, (c) => c === category)
-}
-
-/**
- * The inverse of `appendProgramLogValue`: pops the last value (and its
- * `isWarmup` flag) off the date's no-category entry, deleting the entry
- * row entirely if that empties it. Used to "uncheck" the most recently
- * checked row in the fixed-row bodyweight/time/distance set UI — checking
- * only ever advances to the next open row, so unchecking only ever
- * retracts the most recent one.
- */
-export async function removeLastProgramLogValue(
-  programExerciseId: number,
-  date: string,
-  weekNumber: number
-): Promise<void> {
-  return db.transaction('rw', db.programLogEntries, async () => {
-    const existing = await db.programLogEntries
-      .where('programExerciseId')
-      .equals(programExerciseId)
-      .and((e) => e.date === date && (e.chosenCategory ?? null) === null)
-      .first()
-    if (!existing || existing.values.length === 0) return
-
-    const nextValues = existing.values.slice(0, -1)
-    const nextIsWarmup = existing.isWarmup.slice(0, -1)
-    if (nextValues.length === 0) {
-      await db.programLogEntries.delete(existing.id!)
-      return
-    }
-    await db.programLogEntries.update(existing.id!, {
-      weekNumber,
-      values: nextValues,
-      isWarmup: nextIsWarmup,
-    })
-  })
 }

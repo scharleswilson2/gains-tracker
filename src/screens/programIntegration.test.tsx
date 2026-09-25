@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { Progress } from './Progress'
 import { History } from './History'
 import { ProgramSlotCard } from '../components/ProgramSlotCard'
@@ -81,7 +82,11 @@ describe('program day -> week label -> history', () => {
 
     cleanup()
 
-    render(<History />)
-    expect(await screen.findByText(`${PROGRAM_DATE} — Lift session`)).toBeInTheDocument()
+    render(
+      <MemoryRouter>
+        <History />
+      </MemoryRouter>
+    )
+    expect(await screen.findByText(`${PROGRAM_DATE} — Lift session (1 exercise)`)).toBeInTheDocument()
   })
 })

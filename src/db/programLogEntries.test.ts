@@ -7,7 +7,7 @@ import {
   getLastWeekSimpleValue,
   getLastWeekCategoryValue,
   logCategoryChoice,
-  removeLastProgramLogValue,
+  updateProgramLogValue,
   upsertProgramLogEntry,
 } from './programLogEntries'
 
@@ -294,32 +294,31 @@ describe('getLastWeekCategoryValue', () => {
   })
 })
 
-describe('removeLastProgramLogValue', () => {
-  it('pops the last value and isWarmup flag off the no-category entry', async () => {
+describe('updateProgramLogValue', () => {
+  it('overwrites the value at the given index, leaving other values untouched', async () => {
     await appendProgramLogValue(60, '2026-07-27', 1, 3)
     await appendProgramLogValue(60, '2026-07-27', 1, 4)
 
-    await removeLastProgramLogValue(60, '2026-07-27', 1)
+    await updateProgramLogValue(60, '2026-07-27', 0, 5)
 
     const entries = await getProgramLogEntriesForDate(60, '2026-07-27')
     expect(entries).toHaveLength(1)
-    expect(entries[0].values).toEqual([3])
-    expect(entries[0].isWarmup).toEqual([false])
-  })
-
-  it('deletes the entry entirely once its last value is removed', async () => {
-    await appendProgramLogValue(61, '2026-07-27', 1, 3)
-
-    await removeLastProgramLogValue(61, '2026-07-27', 1)
-
-    const entries = await getProgramLogEntriesForDate(61, '2026-07-27')
-    expect(entries).toHaveLength(0)
+    expect(entries[0].values).toEqual([5, 4])
   })
 
   it('is a no-op when there is nothing logged for that slot+date', async () => {
-    await expect(removeLastProgramLogValue(999, '2026-07-27', 1)).resolves.toBeUndefined()
+    await expect(updateProgramLogValue(999, '2026-07-27', 0, 5)).resolves.toBeUndefined()
     const entries = await getProgramLogEntriesForDate(999, '2026-07-27')
     expect(entries).toHaveLength(0)
+  })
+
+  it('is a no-op when the index is out of range', async () => {
+    await appendProgramLogValue(61, '2026-07-27', 1, 3)
+
+    await updateProgramLogValue(61, '2026-07-27', 5, 9)
+
+    const entries = await getProgramLogEntriesForDate(61, '2026-07-27')
+    expect(entries[0].values).toEqual([3])
   })
 
   it('does not touch a category_choice entry for the same slot+date', async () => {
@@ -334,10 +333,13 @@ describe('removeLastProgramLogValue', () => {
     })
     await appendProgramLogValue(62, '2026-07-27', 1, 5)
 
-    await removeLastProgramLogValue(62, '2026-07-27', 1)
+    await updateProgramLogValue(62, '2026-07-27', 0, 9)
 
     const entries = await getProgramLogEntriesForDate(62, '2026-07-27')
-    expect(entries).toHaveLength(1)
-    expect(entries[0].chosenCategory).toBe('Triceps')
+    expect(entries).toHaveLength(2)
+    const category = entries.find((e) => e.chosenCategory === 'Triceps')
+    const plain = entries.find((e) => e.chosenCategory === undefined)
+    expect(category?.values).toEqual([10])
+    expect(plain?.values).toEqual([9])
   })
 })

@@ -4,6 +4,7 @@ import { LogLift } from './screens/LogLift'
 import { LogCatching } from './screens/LogCatching'
 import { Progress } from './screens/Progress'
 import { History } from './screens/History'
+import { HistorySessionDetail } from './screens/HistorySessionDetail'
 import { Bodyweight } from './screens/Bodyweight'
 import { Settings } from './screens/Settings'
 import './App.css'
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/catching" element={<LogCatching />} />
             <Route path="/progress" element={<Progress />} />
             <Route path="/history" element={<History />} />
+            <Route path="/history/:date" element={<HistorySessionDetail />} />
             <Route path="/bodyweight" element={<Bodyweight />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

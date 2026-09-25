@@ -1,4 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { Link } from 'react-router-dom'
 import { db } from '../db/schema'
 import './History.css'
 
@@ -6,50 +7,65 @@ interface HistoryRow {
   date: string
   label: string
   key: string
+  to?: string
 }
 
 export function History() {
   const rows = useLiveQuery(async (): Promise<HistoryRow[]> => {
-    const [lifts, catching, bodyweight, programLogEntries] = await Promise.all([
-      db.workoutSessions.toArray(),
+    const [entries, sets, catching, bodyweight, programLogEntries, sessions] = await Promise.all([
+      db.exerciseEntries.toArray(),
+      db.sets.toArray(),
       db.catchingSessions.toArray(),
       db.bodyweightEntries.toArray(),
       db.programLogEntries.toArray(),
+      db.workoutSessions.toArray(),
     ])
 
-    // Two bulk lookups instead of two sequential gets per row: program-log
-    // history grows without bound, so a per-row round trip would keep getting
-    // slower on every re-run of this live query.
+    const sessionDateById = new Map(sessions.map((s) => [s.id!, s.date]))
+    const entryIdsWithSets = new Set(sets.map((s) => s.exerciseEntryId))
+
+    // A "lift session" groups every exercise logged on a date — both the
+    // weighted-lift path (workoutSessions/exerciseEntries/sets) and the
+    // bodyweight/time/distance/category path (programLogEntries) — into a
+    // single clickable summary row instead of one row per exercise. An
+    // exerciseEntry with no sets isn't something the lifter actually did,
+    // so it's excluded.
+    const exerciseIdsByDate = new Map<string, Set<number>>()
+    for (const entry of entries) {
+      if (!entryIdsWithSets.has(entry.id!)) continue
+      const date = sessionDateById.get(entry.sessionId)
+      if (!date) continue
+      const ids = exerciseIdsByDate.get(date) ?? new Set<number>()
+      ids.add(entry.exerciseId)
+      exerciseIdsByDate.set(date, ids)
+    }
+
     const slotIds = [...new Set(programLogEntries.map((e) => e.programExerciseId))]
     const slots = await db.programExercises.bulkGet(slotIds)
     const slotsById = new Map(slotIds.map((id, i) => [id, slots[i]]))
-
-    const exerciseIds = [
-      ...new Set(slots.filter((s) => s !== undefined).map((s) => s.exerciseId)),
-    ]
-    const exercises = await db.exercises.bulkGet(exerciseIds)
-    const exercisesById = new Map(exerciseIds.map((id, i) => [id, exercises[i]]))
-
-    const programLogRows: HistoryRow[] = []
     for (const entry of programLogEntries) {
       const slot = slotsById.get(entry.programExerciseId)
-      const exercise = slot ? exercisesById.get(slot.exerciseId) : undefined
-      const name = exercise?.name ?? 'Unknown Exercise'
-      const label = entry.chosenExercise
-        ? `${name} (${entry.chosenCategory}): ${entry.chosenExercise} — ${entry.values.join(', ')}`
-        : `${name}: ${entry.values.length} set${entry.values.length === 1 ? '' : 's'} logged`
-      programLogRows.push({ date: entry.date, label, key: `program-${entry.id}` })
+      if (!slot) continue
+      const ids = exerciseIdsByDate.get(entry.date) ?? new Set<number>()
+      ids.add(slot.exerciseId)
+      exerciseIdsByDate.set(entry.date, ids)
     }
 
+    const liftRows: HistoryRow[] = [...exerciseIdsByDate.entries()].map(([date, exerciseIds]) => ({
+      date,
+      label: `Lift session (${exerciseIds.size} exercise${exerciseIds.size === 1 ? '' : 's'})`,
+      key: `lift-${date}`,
+      to: `/history/${date}`,
+    }))
+
     const combined: HistoryRow[] = [
-      ...lifts.map((s) => ({ date: s.date, label: 'Lift session', key: `lift-${s.id}` })),
+      ...liftRows,
       ...catching.map((s) => ({ date: s.date, label: 'Catching session', key: `catching-${s.id}` })),
       ...bodyweight.map((b) => ({
         date: b.date,
         label: `Bodyweight: ${b.weightLbs} lbs`,
         key: `bw-${b.id}`,
       })),
-      ...programLogRows,
     ]
 
     combined.sort((a, b) => b.date.localeCompare(a.date))
@@ -62,7 +78,15 @@ export function History() {
       <ul className="history-list">
         {rows.map((row) => (
           <li key={row.key} className="history-row">
-            {row.date} — {row.label}
+            {row.to ? (
+              <Link to={row.to}>
+                {row.date} — {row.label}
+              </Link>
+            ) : (
+              <>
+                {row.date} — {row.label}
+              </>
+            )}
           </li>
         ))}
       </ul>

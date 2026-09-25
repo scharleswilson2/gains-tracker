@@ -102,6 +102,12 @@ export interface ProgramExercise {
   tempo: string | null
   categoryOptions?: CategoryOption[]
   categoriesToPick?: number
+  // Explicit display-order priority for this slot's block, lower first
+  // (e.g. a warmup block like "Plyos" before the main lift blocks "A"/"B"/
+  // "C", which alphabetical order alone would get wrong). Omitted for a
+  // program that doesn't need it, in which case its block sorts
+  // alphabetically instead — see `getDaySlots`.
+  blockOrder?: number
 }
 
 export interface ProgramPrescription {

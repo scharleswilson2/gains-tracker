@@ -45,8 +45,8 @@ export async function getActiveProgramDay(date: string): Promise<ActiveProgramDa
   if (weeks.length === 0) return null
   const week = weeks[0]
 
-  const dayOfWeek = localDayOfWeek(date) // Mon=1 ... Fri=5 map directly to dayNumber
-  if (dayOfWeek < 1 || dayOfWeek > 5) return null // weekend
+  const dayOfWeek = localDayOfWeek(date) // Mon=1 ... Sat=6 map directly to dayNumber
+  if (dayOfWeek < 1 || dayOfWeek > 6) return null // Sunday
 
   const day = await db.programDays
     .where('programId')

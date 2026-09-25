@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProgramSlotCard } from './ProgramSlotCard'
 import { addExercise } from '../db/exercises'
@@ -234,41 +234,65 @@ describe('ProgramSlotCard', () => {
 
     expect(await screen.findByText(/Last week: 205 lbs x 5/)).toBeInTheDocument()
 
-    // "Last week" resolving only proves getLastWeekWeightResult settled,
-    // not getSetsForExerciseOnDate — they're independent live queries with
-    // no ordering guarantee between them. Explicitly flush a couple more
-    // macrotask ticks so this assertion doesn't depend on the two queries
-    // happening to need the same number of round-trips today.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
-
+    // Still empty (the suggestion is a placeholder hint, not a pre-filled
+    // value — see the next test), and definitely not the other slot's 999.
     const weightInput = screen.getByLabelText(/weight \(lbs\) — set 1/i)
     expect(weightInput).toHaveValue(null)
     expect(screen.getByRole('button', { name: /log set/i })).toBeEnabled()
     expect(screen.queryByText('999')).not.toBeInTheDocument()
   })
 
-  it('checking the first row logs its prescribed target value', async () => {
+  it('shows last week\'s heaviest weight plus 5 as a placeholder hint, leaving warmup rows without one', async () => {
+    const exerciseId = await addExercise('Test Suggested Weight')
+    const priorSession = await getOrCreateSessionForDate('2026-07-13')
+    const priorEntry = await getOrCreateExerciseEntry(priorSession, exerciseId, 70, 3)
+    await addSet(priorEntry, 135, 5)
+    await addSet(priorEntry, 140, 3) // heaviest working set last week
+
+    const slot = makeSlot(
+      { id: 70, exerciseId, measureType: 'weight' },
+      { id: 20, programExerciseId: 70, weekNumber: 4, rir: 'M', warmupTargets: [95], workingTargets: [5, 5], isTest: false }
+    )
+
+    render(<ProgramSlotCard slot={slot} date="2026-07-20" weekNumber={4} />)
+
+    expect(await screen.findByText(/Last week: 140 lbs x 3 — try 145 lbs this week/)).toBeInTheDocument()
+    // A placeholder is display-only — it never becomes the actual value, so
+    // there's no async round-trip to wait for and no risk of it silently
+    // getting logged if the lifter just clicks "Log set" without typing.
+    expect(screen.getByLabelText(/weight \(lbs\) — warmup 1/i)).not.toHaveAttribute('placeholder')
+    expect(screen.getByLabelText(/weight \(lbs\) — set 1/i)).toHaveAttribute('placeholder', '145')
+    expect(screen.getByLabelText(/weight \(lbs\) — set 2/i)).toHaveAttribute('placeholder', '145')
+    expect(screen.getByLabelText(/weight \(lbs\) — set 1/i)).toHaveValue(null)
+  })
+
+  it('logs the first row with the actual reps typed in, not just the prescribed target', async () => {
     const user = userEvent.setup()
     const exerciseId = await addExercise('Test Depth Drop')
     const slot = makeSlot(
-      { exerciseId, measureType: 'bodyweight_reps' },
+      { id: 3, exerciseId, measureType: 'bodyweight_reps' },
       { id: 3, programExerciseId: 3, weekNumber: 1, rir: null, warmupTargets: [], workingTargets: [3, 3], isTest: false }
     )
 
     render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
 
-    const row1 = screen.getByLabelText(/set 1 \(target 3\)/i)
-    await user.click(row1)
+    const input1 = screen.getByLabelText(/set 1 \(target 3\)/i)
+    expect(input1).toHaveValue(3) // pre-filled with the target
+    await user.clear(input1)
+    await user.type(input1, '5')
+    await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
 
-    await waitFor(() => expect(row1).toBeChecked())
-    expect(screen.getByLabelText(/set 2 \(target 3\)/i)).not.toBeChecked()
+    await waitFor(() => {
+      const entries = db.programLogEntries.where('programExerciseId').equals(3).toArray()
+      return expect(entries).resolves.toEqual([
+        expect.objectContaining({ values: [5] }),
+      ])
+    })
+    expect(screen.getByLabelText(/set 2 \(target 3\)/i)).toHaveValue(3)
   })
 
-  it('does not double-log when two change events land on the same row before the first write resolves', async () => {
-    const exerciseId = await addExercise('Test Rapid Double Check')
+  it('does not double-log when two log clicks land on the same row before the first write resolves', async () => {
+    const exerciseId = await addExercise('Test Rapid Double Log')
     const slot = makeSlot(
       { exerciseId, measureType: 'bodyweight_reps' },
       { id: 13, programExerciseId: 13, weekNumber: 1, rir: null, warmupTargets: [], workingTargets: [3, 3], isTest: false }
@@ -276,43 +300,53 @@ describe('ProgramSlotCard', () => {
 
     render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
 
-    const row1 = screen.getByLabelText(/set 1 \(target 3\)/i)
+    const logButton = screen.getAllByRole('button', { name: /log set/i })[0]
     // fireEvent (unlike userEvent) doesn't await between events, so both
-    // change events fire before the first appendProgramLogValue write (and
-    // the live-query refresh it triggers) resolves — reproducing the race
-    // the isSubmitting guard closes.
-    fireEvent.click(row1)
-    fireEvent.click(row1)
+    // clicks fire before the first appendProgramLogValue write (and the
+    // live-query refresh it triggers) resolves — reproducing the race the
+    // isSubmitting guard closes.
+    fireEvent.click(logButton)
+    fireEvent.click(logButton)
 
-    await waitFor(() => expect(row1).toBeChecked())
-    // Only row 1 should be checked — a double-fire must not silently log a
-    // second set and check row 2 on the user's behalf.
-    expect(screen.getByLabelText(/set 2 \(target 3\)/i)).not.toBeChecked()
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /update/i })).toHaveLength(1))
+    // Only row 1 should be logged — a double-fire must not silently log a
+    // second set on the user's behalf.
+    expect(screen.getAllByRole('button', { name: /log set/i })).toHaveLength(1)
   })
 
-  it('unchecking the most recently checked row removes it, but an earlier row cannot be unchecked', async () => {
+  it('lets an already-logged simple-value row be edited independently via Update', async () => {
     const user = userEvent.setup()
-    const exerciseId = await addExercise('Test Uncheck Row')
+    const exerciseId = await addExercise('Test Update Simple Row')
     const slot = makeSlot(
-      { exerciseId, measureType: 'bodyweight_reps' },
+      { id: 10, exerciseId, measureType: 'bodyweight_reps' },
       { id: 10, programExerciseId: 10, weekNumber: 1, rir: null, warmupTargets: [], workingTargets: [3, 4], isTest: false }
     )
 
     render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
 
-    const row1 = screen.getByLabelText(/set 1 \(target 3\)/i)
-    const row2 = screen.getByLabelText(/set 2 \(target 4\)/i)
-    await user.click(row1)
-    await waitFor(() => expect(row1).toBeChecked())
-    await user.click(row2)
-    await waitFor(() => expect(row2).toBeChecked())
+    await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
+    await waitFor(() => expect(screen.getByLabelText(/set 2 \(target 4\)/i)).toBeInTheDocument())
+    const input2 = screen.getByLabelText(/set 2 \(target 4\)/i)
+    await user.clear(input2)
+    await user.type(input2, '6')
+    await user.click(screen.getByRole('button', { name: /log set/i }))
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /update/i })).toHaveLength(2))
 
-    await user.click(row2)
-    await waitFor(() => expect(row2).not.toBeChecked())
-    expect(row1).toBeChecked()
+    const input1 = screen.getByLabelText(/set 1 \(target 3\)/i)
+    await user.clear(input1)
+    await user.type(input1, '2')
+    await user.click(screen.getAllByRole('button', { name: /update/i })[0])
+
+    await waitFor(async () => {
+      const entries = await db.programLogEntries
+        .where('programExerciseId')
+        .equals(10)
+        .toArray()
+      expect(entries[0].values).toEqual([2, 6])
+    })
   })
 
-  it('adds an extra checkbox row beyond the prescription, logging the last target value when checked', async () => {
+  it('adds an extra row beyond the prescription, pre-filled with the last target', async () => {
     const user = userEvent.setup()
     const exerciseId = await addExercise('Test Extra Bodyweight Row')
     const slot = makeSlot(
@@ -322,14 +356,15 @@ describe('ProgramSlotCard', () => {
 
     render(<ProgramSlotCard slot={slot} date="2026-07-06" weekNumber={1} />)
 
-    await user.click(screen.getByLabelText(/set 1 \(target 3\)/i))
-    await waitFor(() => expect(screen.getByLabelText(/set 1 \(target 3\)/i)).toBeChecked())
+    await user.click(screen.getByRole('button', { name: /log set/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /update/i })).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: /add extra set/i }))
-    const extraRow = screen.getByLabelText(/set 2 \(target 3\)/i)
-    await user.click(extraRow)
+    const extraInput = screen.getByLabelText(/set 2 \(target 3\)/i)
+    expect(extraInput).toHaveValue(3)
+    await user.click(screen.getByRole('button', { name: /log set/i }))
 
-    await waitFor(() => expect(extraRow).toBeChecked())
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /update/i })).toHaveLength(2))
   })
 
   it('logs a category_choice (Arm Farm) entry with the picked category and exercise', async () => {
@@ -505,17 +540,16 @@ describe('ProgramSlotCard', () => {
 
     expect(await screen.findByText('Last week: 3')).toBeInTheDocument()
 
-    // Checkbox rows log the exact prescribed target with no numeric
-    // override, so this week's achievable outcome is fixed by the
-    // prescription rather than typed input. Prescription targets are
-    // [3, 3] here — same as last week's 3 — so completing them (including
-    // an extra row, which also logs the last defined target) can only ever
-    // match, never beat, last week's value. See the next test for a
-    // prescription that legitimately beats last week.
-    await user.click(screen.getByLabelText(/set 1 \(target 3\)/i))
-    await user.click(screen.getByLabelText(/set 2 \(target 3\)/i))
+    // Logging the prescribed targets as-is (leaving the pre-filled value
+    // untouched) — [3, 3] here, same as last week's 3 — can only ever match,
+    // never beat, last week's value. See the next test for a prescription
+    // that legitimately beats last week.
+    await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /log set/i })).toHaveLength(1))
+    await user.click(screen.getByRole('button', { name: /log set/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /add extra set/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /add extra set/i }))
-    await user.click(screen.getByLabelText(/set 3 \(target 3\)/i))
+    await user.click(screen.getByRole('button', { name: /log set/i }))
 
     expect(await screen.findByText('Matched last week')).toBeInTheDocument()
   })
@@ -539,7 +573,7 @@ describe('ProgramSlotCard', () => {
 
     expect(await screen.findByText('Last week: 2')).toBeInTheDocument()
 
-    await user.click(screen.getByLabelText(/set 1 \(target 3\)/i))
+    await user.click(screen.getByRole('button', { name: /log set/i }))
 
     expect(await screen.findByText('Beat last week!')).toBeInTheDocument()
   })

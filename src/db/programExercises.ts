@@ -17,6 +17,7 @@ export interface AddProgramExerciseInput {
   tempo: string | null
   categoryOptions?: CategoryOption[]
   categoriesToPick?: number
+  blockOrder?: number
 }
 
 export async function addProgramExercise(input: AddProgramExerciseInput): Promise<number> {
@@ -63,10 +64,23 @@ export async function getDaySlots(dayId: number, weekNumber: number): Promise<Re
   // '￿' sorts after any real block label, so slots with no block
   // (blockLabel: null) always land at the end rather than interleaving
   // alphabetically with real labels like "A"/"B"/"C"/"Speed".
+  //
+  // A slot's explicit `blockOrder`, when set, takes priority over the
+  // alphabetical fallback — needed for a program like "Plyos" / "Med Balls"
+  // coming before "A"/"B"/"C", which alphabetical order alone gets
+  // backwards. A block with no `blockOrder` sorts after every block that
+  // has one (Infinity), then falls back to alphabetical among the
+  // remaining ties — matching every pre-existing program, which never set
+  // `blockOrder` and relied on alphabetical order throughout.
   resolved.sort((a, b) => {
     const blockA = a.programExercise.blockLabel ?? '￿'
     const blockB = b.programExercise.blockLabel ?? '￿'
-    if (blockA !== blockB) return blockA.localeCompare(blockB)
+    if (blockA !== blockB) {
+      const orderA = a.programExercise.blockOrder ?? Infinity
+      const orderB = b.programExercise.blockOrder ?? Infinity
+      if (orderA !== orderB) return orderA - orderB
+      return blockA.localeCompare(blockB)
+    }
     return a.programExercise.orderIndex - b.programExercise.orderIndex
   })
 
