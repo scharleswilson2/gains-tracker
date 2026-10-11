@@ -242,7 +242,7 @@ describe('LogLift program day + navigation', () => {
     expect(entry.weekNumber).toBe(1)
   })
 
-  it('shows the date and disables logging when the displayed week is not actually live', async () => {
+  it('still allows logging on a day in a past week that has already ended', async () => {
     const user = userEvent.setup()
     const exerciseId = await addExercise('Test Stale Week Exercise')
     const programId = await createProgram('Ended Program', '2026-06-01', '2026-06-05')
@@ -272,6 +272,36 @@ describe('LogLift program day + navigation', () => {
 
     expect(await screen.findByText('Test Stale Week Exercise')).toBeInTheDocument()
     expect(screen.getByText(/2026-06-01/)).toBeInTheDocument()
+    expect(await screen.findByLabelText(/weight \(lbs\) — set 1/i)).toBeInTheDocument()
+  })
+
+  it('shows the date and disables logging for a week that has not started yet', async () => {
+    const exerciseId = await addExercise('Test Future Week Exercise')
+    const programId = await createProgram('Future Program', '2026-07-27', '2026-07-31')
+    await addProgramWeek(programId, 1, '2026-07-27', '2026-07-31')
+    const dayId = await addProgramDay(programId, 1)
+    const slotId = await addProgramExercise({
+      dayId,
+      exerciseId,
+      blockLabel: 'B',
+      orderIndex: 0,
+      measureType: 'weight',
+      eachSide: false,
+      tempo: null,
+    })
+    await addProgramPrescription({
+      programExerciseId: slotId,
+      weekNumber: 1,
+      rir: null,
+      warmupTargets: [],
+      workingTargets: [5],
+      isTest: false,
+    })
+
+    render(<LogLift />)
+
+    expect(await screen.findByText('Test Future Week Exercise')).toBeInTheDocument()
+    expect(screen.getByText(/2026-07-27/)).toBeInTheDocument()
     expect(screen.queryByLabelText(/weight \(lbs\) — set 1/i)).not.toBeInTheDocument()
   })
 })

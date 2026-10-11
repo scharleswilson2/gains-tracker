@@ -34,9 +34,10 @@ export function LogLift() {
     [activeEntry]
   ) ?? []
 
-  const isLiveWeek = activeEntry
-    ? today >= activeEntry.week.startDate && today <= activeEntry.week.endDate
-    : false
+  // Logging is open for any week that has started — the current week and past
+  // weeks (to log or fix a day you missed). Only a week that hasn't begun yet
+  // is read-only, so a workout can't be logged against the wrong week.
+  const isLiveWeek = activeEntry ? today >= activeEntry.week.startDate : false
 
   const allExercises = useLiveQuery(() => listExercises(), []) ?? []
   const matches =
