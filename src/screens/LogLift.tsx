@@ -5,7 +5,6 @@ import { getExerciseHistory, getLastSessionSets } from '../db/workouts'
 import { findDefaultDayIndex, listAllProgramDaysChronological } from '../db/programs'
 import { getDaySlots, groupSlotsByBlock } from '../db/programExercises'
 import { ProgramSlotCard } from '../components/ProgramSlotCard'
-import { SlotHeader } from '../components/SlotHeader'
 import { DayNavigator } from '../components/DayNavigator'
 import { logWeightSet } from '../lib/logWeightSet'
 import { todayIso } from '../lib/dates'
@@ -34,10 +33,6 @@ export function LogLift() {
     [activeEntry]
   ) ?? []
 
-  // Logging is open for any week that has started — the current week and past
-  // weeks (to log or fix a day you missed). Only a week that hasn't begun yet
-  // is read-only, so a workout can't be logged against the wrong week.
-  const isLiveWeek = activeEntry ? today >= activeEntry.week.startDate : false
 
   const allExercises = useLiveQuery(() => listExercises(), []) ?? []
   const matches =
@@ -114,18 +109,14 @@ export function LogLift() {
           {groupSlotsByBlock(slots).map(([blockLabel, blockSlots]) => (
             <div key={blockLabel} className="log-lift-block">
               <h3 className="log-lift-block-label">{blockLabel}</h3>
-              {blockSlots.map((slot) =>
-                isLiveWeek ? (
-                  <ProgramSlotCard
-                    key={slot.programExercise.id}
-                    slot={slot}
-                    date={activeEntry.date}
-                    weekNumber={activeEntry.week.weekNumber}
-                  />
-                ) : (
-                  <SlotHeader key={slot.programExercise.id} slot={slot} />
-                )
-              )}
+              {blockSlots.map((slot) => (
+                <ProgramSlotCard
+                  key={slot.programExercise.id}
+                  slot={slot}
+                  date={activeEntry.date}
+                  weekNumber={activeEntry.week.weekNumber}
+                />
+              ))}
             </div>
           ))}
         </section>
