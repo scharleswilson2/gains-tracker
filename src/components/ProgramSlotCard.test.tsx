@@ -547,7 +547,11 @@ describe('ProgramSlotCard', () => {
     await user.click(screen.getAllByRole('button', { name: /log set/i })[0])
     await waitFor(() => expect(screen.getAllByRole('button', { name: /log set/i })).toHaveLength(1))
     await user.click(screen.getByRole('button', { name: /log set/i }))
-    await waitFor(() => expect(screen.getByRole('button', { name: /add extra set/i })).toBeInTheDocument())
+    // "+ Add extra set" is always visible for simple-value slots, so waiting
+    // on it doesn't prove set 2's write landed. Wait for set 2 to flip to
+    // Update first — otherwise the extra row renders (disabled) alongside a
+    // still-unlogged set 2, leaving two "Log set" buttons.
+    await waitFor(() => expect(screen.queryAllByRole('button', { name: /log set/i })).toHaveLength(0))
     await user.click(screen.getByRole('button', { name: /add extra set/i }))
     await user.click(screen.getByRole('button', { name: /log set/i }))
 
