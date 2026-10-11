@@ -11,7 +11,7 @@ import './App.css'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <div className="app-shell">
         <header className="app-header">
           <span className="app-title">Gains Tracker</span>
