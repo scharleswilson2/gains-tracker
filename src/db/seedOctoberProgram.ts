@@ -1,0 +1,387 @@
+import { reps, sameEveryWeek, seedProgramFromSpec } from './seedProgramSpec'
+import type { SlotSpec } from './seedProgramSpec'
+import { ARM_FARM_CATEGORIES, MOBILITY_SLOTS } from './seedSeptemberProgram'
+
+const PROGRAM_NAME = 'October 19 – November 14, 2026'
+
+// --- Monday: Lower ---------------------------------------------------
+
+const DAY_1_SLOTS: SlotSpec[] = [
+  {
+    exerciseName: 'Hurdle Hops / PAP Circuit',
+    blockLabel: 'Plyos',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 1)),
+  },
+  {
+    exerciseName: 'Kneeling Scoop / OH Toss',
+    blockLabel: 'Med Balls',
+    measureType: 'bodyweight_reps',
+    eachSide: true,
+    tempo: 'for height',
+    weeks: sameEveryWeek(null, reps(2, 4)),
+  },
+  {
+    exerciseName: 'Safety Bar Box Squat',
+    blockLabel: 'A',
+    measureType: 'weight',
+    eachSide: false,
+    tempo: '5 second eccentric',
+    weeks: sameEveryWeek(null, reps(4, 3)),
+  },
+  {
+    exerciseName: 'Rapid Belt Squat',
+    blockLabel: 'A',
+    measureType: 'weight',
+    eachSide: false,
+    tempo: 'fast',
+    weeks: sameEveryWeek(null, reps(3, 3)),
+  },
+  {
+    exerciseName: 'DB Bulgarian Split Squat',
+    blockLabel: 'B',
+    measureType: 'weight',
+    eachSide: true,
+    tempo: '3 second eccentric',
+    weeks: sameEveryWeek(null, reps(3, 5)),
+  },
+  {
+    exerciseName: 'Skater Jump with SL Vert Jump',
+    blockLabel: 'B',
+    measureType: 'bodyweight_reps',
+    eachSide: true,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(3, 4)),
+  },
+  {
+    exerciseName: 'SL Box Step Up',
+    blockLabel: 'B',
+    measureType: 'weight',
+    eachSide: true,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(3, 6)),
+  },
+  {
+    exerciseName: 'Nordic Curl on GHD',
+    blockLabel: 'C',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: '5 second eccentric',
+    weeks: sameEveryWeek(null, reps(2, 6)),
+  },
+  {
+    exerciseName: 'Weighted Hip Airplane',
+    blockLabel: 'C',
+    measureType: 'weight',
+    eachSide: true,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 5)),
+  },
+  {
+    exerciseName: 'Half Kneeling Cable Rotation',
+    blockLabel: 'C',
+    measureType: 'weight',
+    eachSide: true,
+    tempo: 'hugging a med ball',
+    weeks: sameEveryWeek(null, reps(2, 8)),
+  },
+]
+
+// --- Tuesday: Upper --------------------------------------------------
+
+const DAY_2_SLOTS: SlotSpec[] = [
+  {
+    exerciseName: 'Push Up Drop Catch',
+    blockLabel: 'Plyos',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: 'from 6" elevation',
+    weeks: sameEveryWeek(null, reps(2, 10)),
+  },
+  {
+    exerciseName: 'OH Supine Throw / Rapid Supine Press',
+    blockLabel: 'Med Balls',
+    measureType: 'bodyweight_reps',
+    eachSide: true,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 5)),
+  },
+  {
+    exerciseName: 'DB Incline Bench Alternating Eccentric',
+    blockLabel: 'A',
+    measureType: 'weight',
+    eachSide: false,
+    tempo: '5 second eccentric, alternating arms',
+    weeks: sameEveryWeek(null, reps(4, 5)),
+  },
+  {
+    exerciseName: 'Banded Assisted Plyo Push Up',
+    blockLabel: 'A',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(3, 5)),
+  },
+  {
+    exerciseName: 'Bird Dog',
+    blockLabel: 'A',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(3, 8)),
+  },
+  {
+    exerciseName: 'Landmine Split Jerk Switch',
+    blockLabel: 'B',
+    measureType: 'weight',
+    eachSide: true,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(3, 5)),
+  },
+  {
+    exerciseName: 'Split Stance Cable SA Row',
+    blockLabel: 'B',
+    measureType: 'weight',
+    eachSide: true,
+    tempo: '5 second eccentric',
+    weeks: sameEveryWeek(null, reps(3, 6)),
+  },
+  {
+    exerciseName: 'Scap Push Ups',
+    blockLabel: 'B',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 10)),
+  },
+  {
+    exerciseName: 'Weighted Prone Swimmers',
+    blockLabel: 'C',
+    measureType: 'weight',
+    eachSide: false,
+    tempo: '2.5-5 lbs',
+    weeks: sameEveryWeek(null, reps(2, 8)),
+  },
+  {
+    exerciseName: 'Zottman Curl / Skull Crusher',
+    blockLabel: 'C',
+    measureType: 'weight',
+    eachSide: false,
+    tempo: '5 second eccentric skull crusher, AMRAP',
+    weeks: sameEveryWeek(null, reps(2, 12)),
+  },
+  {
+    exerciseName: 'Pronations/Supinations',
+    blockLabel: 'C',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: 'any forearm circuit, AMRAP',
+    weeks: sameEveryWeek(null, reps(2, 12)),
+  },
+]
+
+// --- Thursday: Lower -------------------------------------------------
+
+const DAY_4_SLOTS: SlotSpec[] = [
+  {
+    exerciseName: 'Lateral Bounding / PAP Over-ISO',
+    blockLabel: 'Plyos',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 1)),
+  },
+  {
+    exerciseName: 'Step In Scoop Toss / Step Back',
+    blockLabel: 'Med Balls',
+    measureType: 'bodyweight_reps',
+    eachSide: true,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 4)),
+  },
+  {
+    exerciseName: 'Reverse Lunge',
+    blockLabel: 'A',
+    measureType: 'weight',
+    eachSide: true,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(3, 5)),
+  },
+  {
+    exerciseName: 'Band-resisted Alternating Split Squat Jumps',
+    blockLabel: 'A',
+    measureType: 'bodyweight_reps',
+    eachSide: true,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(3, 5)),
+  },
+  {
+    exerciseName: 'Heavy Banded RDL',
+    blockLabel: 'B',
+    measureType: 'weight',
+    eachSide: true,
+    tempo: '3 second eccentric',
+    weeks: sameEveryWeek(null, reps(3, 4)),
+  },
+  {
+    exerciseName: 'Curtsy Lunge on Slide Board',
+    blockLabel: 'B',
+    measureType: 'weight',
+    eachSide: true,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(3, 5)),
+  },
+  {
+    exerciseName: 'Med Ball Hold Skater Jump',
+    blockLabel: 'B',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: 'absorb energy',
+    weeks: sameEveryWeek(null, reps(3, 4)),
+  },
+  {
+    exerciseName: 'Cable Payload Press',
+    blockLabel: 'C',
+    measureType: 'weight',
+    eachSide: true,
+    tempo: 'straight arm, explosive, 3 second eccentric on the way back',
+    weeks: sameEveryWeek(null, reps(3, 5)),
+  },
+  {
+    exerciseName: 'Side Bend on GHD',
+    blockLabel: 'C',
+    measureType: 'weight',
+    eachSide: false,
+    tempo: '5 second eccentric',
+    weeks: sameEveryWeek(null, reps(2, 5)),
+  },
+  {
+    exerciseName: 'SL Hip Flexor Sit Up',
+    blockLabel: 'C',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 8)),
+  },
+]
+
+// --- Friday: Upper ---------------------------------------------------
+
+const DAY_5_SLOTS: SlotSpec[] = [
+  {
+    exerciseName: 'Deep Push Pulses',
+    blockLabel: 'Plyos',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 8)),
+  },
+  {
+    exerciseName: 'Wall Chest Pass / OH Wall Dribbles',
+    blockLabel: 'Med Balls',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 6)),
+  },
+  {
+    exerciseName: 'BB Bench Press with Chains',
+    blockLabel: 'A',
+    measureType: 'weight',
+    eachSide: false,
+    tempo: '3 second eccentric; RPE 6 / 70%',
+    weeks: sameEveryWeek(null, reps(3, 4)),
+  },
+  {
+    exerciseName: 'Med Ball Bent Over Press',
+    blockLabel: 'A',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(3, 6)),
+  },
+  {
+    exerciseName: 'Weighted Neutral Grip Chin Up',
+    blockLabel: 'B',
+    measureType: 'weight',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(3, 5)),
+  },
+  {
+    exerciseName: 'Bent Over BB Row',
+    blockLabel: 'B',
+    measureType: 'weight',
+    eachSide: false,
+    tempo: '3 second eccentric',
+    weeks: sameEveryWeek(null, reps(3, 6)),
+  },
+  {
+    exerciseName: 'Banded Face Pull to Y',
+    blockLabel: 'B',
+    measureType: 'bodyweight_reps',
+    eachSide: false,
+    tempo: '8-12 rep range',
+    weeks: sameEveryWeek(null, reps(3, 10)),
+  },
+  {
+    exerciseName: 'DEEP Push Up ISO',
+    blockLabel: 'C',
+    measureType: 'time',
+    eachSide: false,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 90)),
+  },
+  {
+    exerciseName: 'Incline Prone I,Y,T',
+    blockLabel: 'C',
+    measureType: 'bodyweight_reps',
+    eachSide: true,
+    tempo: null,
+    weeks: sameEveryWeek(null, reps(2, 8)),
+  },
+  {
+    exerciseName: 'GHD Full Range Sit Up',
+    blockLabel: 'C',
+    measureType: 'time',
+    eachSide: false,
+    tempo: '5 second eccentric',
+    weeks: sameEveryWeek(null, reps(2, 60)),
+  },
+  {
+    exerciseName: 'Arm Farm',
+    blockLabel: 'C',
+    measureType: 'category_choice',
+    eachSide: false,
+    tempo: '2-3 sets, bi/tricep/forearms focus',
+    categoryOptions: ARM_FARM_CATEGORIES,
+    categoriesToPick: 3,
+    weeks: sameEveryWeek(null, []),
+  },
+]
+
+const WEEK_DATE_RANGES = {
+  1: { startDate: '2026-10-19', endDate: '2026-10-24' },
+  2: { startDate: '2026-10-26', endDate: '2026-10-31' },
+  3: { startDate: '2026-11-02', endDate: '2026-11-07' },
+  4: { startDate: '2026-11-09', endDate: '2026-11-14' },
+}
+
+export function ensureOctoberProgramSeeded(): Promise<void> {
+  return seedProgramFromSpec({
+    name: PROGRAM_NAME,
+    startDate: '2026-10-19',
+    endDate: '2026-11-14',
+    weekRanges: WEEK_DATE_RANGES,
+    days: [
+      { dayNumber: 1, note: 'Lower — Rate of Force Development', slots: DAY_1_SLOTS },
+      { dayNumber: 2, note: 'Upper — Rate of Force Development', slots: DAY_2_SLOTS },
+      { dayNumber: 3, note: 'Mobility/Movement — Recovery', slots: MOBILITY_SLOTS },
+      { dayNumber: 4, note: 'Lower — Rate of Force Development', slots: DAY_4_SLOTS },
+      { dayNumber: 5, note: 'Upper — Rate of Force Development', slots: DAY_5_SLOTS },
+      { dayNumber: 6, note: 'Mobility/Movement — Recovery', slots: MOBILITY_SLOTS },
+    ],
+  })
+}
